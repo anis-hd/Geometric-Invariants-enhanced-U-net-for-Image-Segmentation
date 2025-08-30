@@ -1,4 +1,3 @@
-
 import os
 import cv2
 import numpy as np
@@ -12,24 +11,32 @@ from io import BytesIO
 
 
 class InvariantCalculator:
-    """
-    Manages the calculation and visualization of geometric invariants for an image.
-    """
+
     def __init__(self, config, socketio):
         self.config = config
         self.socketio = socketio
         self.update_log("Invariant Calculator initialized.")
 
     def update_log(self, message):
-        """Sends a log message to the frontend and yields control to the server."""
         print(message)
         self.socketio.emit('invariant_log', {'data': message})
         eventlet.sleep(0.01)
 
-    ############# FOURIER-MELLIN CALCULATION
+
+
+
+
+
+
+
+
+
+
+
+
+    ############# FOURIER-MELLIN CALCULATION ################
 
     class FMCalc:
-        """Calculates Fourier-Mellin moments, which are invariant to rotation, scale, and translation."""
 
         def _fm_single(self, x: np.ndarray, n: int = 500):
             # Pre-process the image channel
@@ -115,6 +122,15 @@ class InvariantCalculator:
             
             return np.concatenate(Mall)
 
+
+
+
+
+
+
+
+
+
     ########### visualization and transformation functions
 
     def _plot_moments(self, moments, title, method):
@@ -144,6 +160,10 @@ class InvariantCalculator:
             new_w = max(1, int(w * 0.8)); new_h = max(1, int(h * 0.8))
             return cv2.resize(image, (new_w, new_h))
         return image
+
+
+
+
 
     ####################    MAIN        #############
     def run(self):

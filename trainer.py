@@ -1,14 +1,3 @@
-#
-#  TRAINING LOGIC MODULE 
-#
-# This module contains the Trainer class, which encapsulates all logic
-# for data preprocessing, model training, and real-time communication
-# with the Flask web interface.
-# =====================================================================================
-
-
-
-
 import os
 import numpy as np
 import pandas as pd
@@ -68,7 +57,6 @@ class Trainer:
                 image_pil = Image.open(img_path).convert("RGB").resize(img_size)
                 image_pil.save(processed_path)
             
-            # Periodically update the frontend
             if (i + 1) % 5 == 0 or (i + 1) == total:
                 progress = int(((i + 1) / total) * 100)
                 self.update_status(f"Processed image {i+1}/{total}", stage='setup_images', progress=progress)
@@ -98,7 +86,6 @@ class Trainer:
                 mask_rgb_np = np.array(mask_rgb_pil)
                 mask_class = np.zeros(mask_rgb_np.shape[:2], dtype=np.uint8)
                 
-                # This inner loop is computationally expensive, so we must yield inside it
                 for class_idx_inner, (rgb_color, class_idx_val) in enumerate(mapping.items()):
                     matches = np.all(mask_rgb_np == np.array(rgb_color), axis=-1)
                     mask_class[matches] = class_idx_val
@@ -111,7 +98,7 @@ class Trainer:
                 progress = int(((i + 1) / total) * 100)
                 self.update_status(f"Processed mask {i+1}/{total}", stage='setup_masks', progress=progress)
                 
-        self.update_status("✅ Mask pre-processing complete.", stage='setup_masks', progress=100)
+        self.update_status(" Mask pre-processing complete.", stage='setup_masks', progress=100)
         return processed_mask_paths
      # Mapping from RGB to class indices
     def create_color_maps(self, csv_path):
@@ -126,7 +113,6 @@ class Trainer:
 
 
     class InvariantMethods:
-        """Container for geometric invariant calculation methods."""
         def _compute_central_moments(self, channel):
             h, w = channel.shape
             y_coords, x_coords = np.mgrid[0:h, 0:w]
@@ -239,7 +225,7 @@ class Trainer:
 
 
 
-############# Baseline U-net architecture
+############# Baseline U-net architecture   ###############
 
 
 
@@ -282,10 +268,16 @@ class Trainer:
                 x = self.ups[idx + 1](concat_skip)
             
             return self.final_conv(x)
+        
 
 
 
-# U-net with feature wise linear modulation (FILM)
+
+###################### U-net with feature wise linear modulation (FILM) ######################
+
+
+
+
     class UNetWithFiLM(UNet):
         def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30):
             super().__init__(in_channels=in_channels, num_classes=num_classes, features=features)
@@ -326,7 +318,11 @@ class Trainer:
 
 
 
-#Unet with patch concatenation
+    ############          Unet with patch concatenation        #################
+
+
+
+
     class UNetWithPatchFeatures(UNet):
         def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30):
             super().__init__(in_channels=in_channels + features[0], num_classes=num_classes, features=features)
@@ -374,7 +370,7 @@ class Trainer:
             progress = int(((i + 1) / num_batches) * 100)
             log_msg = f"Epoch {epoch_num+1}/{total_epochs} - Batch {i+1}/{num_batches} - Loss: {loss.item():.4f}"
             self.socketio.emit('batch_update', {'progress': progress, 'log': log_msg})
-            eventlet.sleep(0) # Critical yield after each batch
+            eventlet.sleep(0) 
             
         return total_loss / len(loader)
 
@@ -414,7 +410,6 @@ class Trainer:
     # MAIN EXECUTION METHOD
     
     def run(self):
-        """The main entry point to start the entire training pipeline."""
         try:
             self.update_status("Starting training process...", stage='init', progress=0)
             
@@ -428,11 +423,11 @@ class Trainer:
             os.makedirs(processed_image_dir, exist_ok=True)
             os.makedirs(processed_mask_dir, exist_ok=True)
             os.makedirs(cache_dir, exist_ok=True)
-            self.update_status("✅ Directories created.")
+            self.update_status(" Directories created.")
             
             # Load Data and Mappings
             rgb_to_class_idx, num_classes = self.create_color_maps(self.config['class_csv'])
-            self.update_status(f"✅ Loaded color mappings for {num_classes} classes.")
+            self.update_status(f" Loaded color mappings for {num_classes} classes.")
             all_image_files = sorted(glob(os.path.join(self.config['image_dir'], '*.jpg')))
             all_rgb_mask_files = sorted(glob(os.path.join(self.config['mask_dir'], '*.png')))
             subset_size = self.config['data_subset'] if self.config['data_subset'] > 0 else len(all_image_files)
@@ -455,11 +450,11 @@ class Trainer:
             for name, (func, f_type) in feature_configs.items():
                 cache_path = os.path.join(cache_dir, f"{name}_cache_{subset_size}.pkl")
                 if os.path.exists(cache_path):
-                    self.update_status(f"✅ Loading {name} features from cache...")
+                    self.update_status(f" Loading {name} features from cache...")
                     with open(cache_path, 'rb') as f:
                         feature_caches[name] = pickle.load(f)
                 else:
-                    self.update_status(f"⚠️ {name} cache not found. Pre-computing...", stage='setup_caching', progress=0)
+                    self.update_status(f" {name} cache not found. Pre-computing...", stage='setup_caching', progress=0)
                     cache_data = {}
                     total_files = len(processed_image_files)
                     for i, img_path in enumerate(tqdm(processed_image_files, desc=f"Computing {name}")):
@@ -470,11 +465,11 @@ class Trainer:
                     with open(cache_path, 'wb') as f:
                         pickle.dump(cache_data, f)
                     feature_caches[name] = cache_data
-                    self.update_status(f"✅ {name} features saved to cache.", stage='setup_caching', progress=100)
+                    self.update_status(f" {name} features saved to cache.", stage='setup_caching', progress=100)
             
             # Split Data and Create Loaders 
             X_train, X_val, y_train, y_val = train_test_split(processed_image_files, processed_mask_files, test_size=0.2, random_state=42)
-            self.update_status(f"✅ Data split: {len(X_train)} training, {len(X_val)} validation.")
+            self.update_status(f" Data split: {len(X_train)} training, {len(X_val)} validation.")
             loader_args = {'batch_size': self.config['batch_size']}
             if self.device.type == "cuda":
                 loader_args.update({'num_workers': 2, 'pin_memory': True})
@@ -516,7 +511,7 @@ class Trainer:
                     
                 histories[name] = history
                 torch.save(model.state_dict(), os.path.join(saved_models_dir, f"{name}_model.pth"))
-                self.update_status(f"✅ {name} model saved.")
+                self.update_status(f" {name} model saved.")
                 
             #Final Visualization 
             self.update_status("--- Generating final training plots ---")
@@ -535,9 +530,9 @@ class Trainer:
             plot_path_relative = os.path.join('outputs', f"training_results_{subset_size}.png")
             plot_path_full = os.path.join('static', plot_path_relative)
             plt.savefig(plot_path_full)
-            self.update_status(f"✅ Final plot saved to {plot_path_full}")
+            self.update_status(f" Final plot saved to {plot_path_full}")
             self.socketio.emit('training_complete', {'plot_url': plot_path_relative})
             
         except Exception as e:
-            self.update_status(f"🔴 An error occurred: {e}")
+            self.update_status(f" An error occurred: {e}")
             self.socketio.emit('training_error', {'error': str(e)})

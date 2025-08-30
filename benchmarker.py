@@ -1,11 +1,3 @@
-# =====================================================================================
-#
-#  This module contains the Benchmarker class, which encapsulates all logic
-#  for loading trained models, performing quantitative and qualitative
-#  evaluations, generating visualizations
-#
-# =====================================================================================
-
 import os
 import numpy as np
 import pandas as pd
