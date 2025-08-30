@@ -31,7 +31,6 @@ import eventlet
 #model architecture must be identical to the one used in training
 
 class DoubleConv(nn.Module):
-    """A block of two convolutional layers with BatchNorm and ReLU."""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.conv = nn.Sequential(
@@ -44,9 +43,23 @@ class DoubleConv(nn.Module):
         )
     def forward(self, x):
         return self.conv(x)
+    
+
+
+
+
+
+
+
+
+# Baseline U-net
+
+
+
+
+
 
 class UNet(nn.Module):
-    """The baseline U-Net architecture."""
     def __init__(self, i=3, o=23, f=[16, 32, 64, 128]):
         super().__init__()
         self.downs = nn.ModuleList()
@@ -79,8 +92,18 @@ class UNet(nn.Module):
             x = self.ups[idx + 1](x)
         return self.final_conv(x)
 
+
+
+
+
+
+###### U-net with feature wise linear modulation (FILM)
+
+
+
+
+
 class UNetWithFiLM(UNet):
-    """U-Net variant that uses Feature-wise Linear Modulation (FiLM) at the bottleneck."""
     def __init__(self, i=3, o=23, f=[16, 32, 64, 128], feature_len=30):
         super().__init__(i, o, f)
         bottleneck_channels = f[-1]
@@ -113,8 +136,16 @@ class UNetWithFiLM(UNet):
             x = self.ups[idx + 1](x)
         return self.final_conv(x)
 
+
+
+########## U-net with patch concatenation
+
+
+
+
+
+
 class UNetWithPatchFeatures(UNet):
-    """U-Net variant that injects patch-based invariant feature maps at the input."""
     def __init__(self, i=3, o=23, f=[16, 32, 64, 128], feature_len=30):
         super().__init__(i + f[0], o, f)
         self.patch_processor = nn.Sequential(
@@ -129,7 +160,6 @@ class UNetWithPatchFeatures(UNet):
         return super().forward(x)
 
 # BENCHMARKER CLASS
-# =====================================================================================
 
 class Benchmarker:
 
@@ -205,6 +235,8 @@ class Benchmarker:
             iou_scores.append(iou.item())
             dice_scores.append(dice.item())
         return np.mean(iou_scores), np.mean(dice_scores)
+    
+
 
     def evaluate_model(self, loader, model, num_classes, feature_type):
         num_correct, num_pixels = 0, 0
@@ -232,6 +264,9 @@ class Benchmarker:
         mean_iou = (total_iou / len(loader)) * 100
         mean_dice = (total_dice / len(loader)) * 100
         return accuracy.item(), mean_iou, mean_dice
+    
+
+
 
     def plot_and_save(self, plot_func, *args, filename):
         plt.figure()
@@ -242,6 +277,11 @@ class Benchmarker:
         plt.close()
         self.update_log(f"✅ {filename} generated.")
         self.socketio.emit('benchmark_result', {'type': 'plot', 'url': relative_path, 'title': filename.replace('_', ' ').replace('.png', '').title()})
+
+
+
+
+
 
 
     #t-sne plot
@@ -261,6 +301,13 @@ class Benchmarker:
         plt.title(title)
         plt.xlabel("t-SNE Component 1")
         plt.ylabel("t-SNE Component 2")
+
+
+
+
+
+
+
 #visualize model segmentation grid
     def _comparison_grid_plotter(self, sample_data, models_dict, color_map):
         original_image = Image.open(sample_data['img_path']).convert("RGB")
@@ -333,7 +380,7 @@ class Benchmarker:
 # MAIN
     def run(self):
         try:
-            # --- 1. Load Data, Maps, and Caches ---
+            # Load Data, Maps, and Caches
             self.update_log("--- 1. Loading Data, Maps, and Caches ---")
             class_idx_to_rgb, num_classes = self.create_color_maps(self.config['class_csv'])
             all_image_files = sorted(glob(os.path.join(self.config['processed_image_dir'], '*.png')))
@@ -348,7 +395,7 @@ class Benchmarker:
                     feature_caches[name] = pickle.load(f)
             self.update_log(" All feature caches loaded.")
 
-            # --- 2. Load Pre-Trained Models ---
+            # Load Pre-Trained Models
             self.update_log("--- 2. Loading Pre-Trained Models ---")
             cm_global_len = next(iter(feature_caches['cm_global'].values())).shape[0]
             fmt_global_len = next(iter(feature_caches['fmt_global'].values())).shape[0]
@@ -366,14 +413,14 @@ class Benchmarker:
                     return
                 config['model'].load_state_dict(torch.load(model_path, map_location=self.device))
                 config['model'].to(self.device)
-            self.update_log("✅ All pre-trained models loaded.")
+            self.update_log(" All pre-trained models loaded.")
 
-            # --- 3. Feature Visualization (t-SNE) ---
+            # Feature Visualization (t-SNE) 
             self.update_log("--- 3.  Feature Visualization (t-SNE) ---")
             self.plot_and_save(self._tsne_plotter, feature_caches['cm_global'], all_mask_files, "t-SNE of Global Complex Moments", filename="tsne_cm_global.png")
             self.plot_and_save(self._tsne_plotter, feature_caches['fmt_global'], all_mask_files, "t-SNE of Global Fourier-Mellin", filename="tsne_fmt_global.png")
 
-            # --- 4. Quantitative Evaluation ---
+            # Quantitative Evaluation
             self.update_log("--- 4.  Quantitative Evaluation ---")
             img_size = (self.config['img_size'], self.config['img_size'])
             transformations = {
@@ -394,7 +441,7 @@ class Benchmarker:
                     self.update_log(f"  - {name}: Acc={acc:.2f}%, IoU={iou:.2f}%, Dice={dice:.2f}%")
             self.socketio.emit('benchmark_result', {'type': 'table', 'data': robustness_results})
 
-            # --- 5. Visualize Segmentation Outputs ---
+            #Visualize Segmentation Outputs
             self.update_log("--- 5.  Visualize Segmentation Outputs ---")
             sample_idx = random.randint(0, len(X_val_paths) - 1)
             sample_img_path = X_val_paths[sample_idx]
@@ -403,7 +450,7 @@ class Benchmarker:
                 sample_data[name] = feature_caches[name][sample_img_path]
             self.plot_and_save(self._comparison_grid_plotter, sample_data, models_to_evaluate, class_idx_to_rgb, filename="segmentation_comparison.png")
             
-            # --- 6. Plot Final Robustness Charts ---
+            #Plot Final Robustness Charts 
             self.update_log("--- 6. Plot Final Robustness Charts ---")
             self.plot_and_save(self._robustness_plotter, robustness_results, 'accuracy', filename="robustness_accuracy.png")
             self.plot_and_save(self._robustness_plotter, robustness_results, 'iou', filename="robustness_iou.png")

@@ -26,32 +26,18 @@ import pickle
 from tqdm import tqdm
 import eventlet
 
-# =====================================================================================
-#                              TRAINER CLASS
-# =====================================================================================
 
 class Trainer:
-    """
-    Manages the entire training pipeline, from data preparation to model saving.
-    """
+
     def __init__(self, config, socketio):
-        """
-        Initializes the Trainer with configuration from the web UI and a Socket.IO instance.
-        """
+
         self.config = config
         self.socketio = socketio
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Trainer initialized on device: {self.device}")
 
-    # =====================================================================================
-    #                         WEB INTERFACE COMMUNICATION
-    # =====================================================================================
-
     def update_status(self, log_message, stage=None, progress=None):
-        """
-        Sends a structured status update to the frontend to update logs and progress bars.
-        Also yields control to the server to prevent disconnections.
-        """
+
         print(log_message)
         payload = {'log_message': log_message}
         if stage:
@@ -61,9 +47,7 @@ class Trainer:
         self.socketio.emit('status_update', payload)
         eventlet.sleep(0.01)
 
-    # =====================================================================================
-    #                         DATA PREPROCESSING FUNCTIONS
-    # =====================================================================================
+    # DATA PREPROCESSING FUNCTIONS
 
     def preprocess_images(self, original_image_paths, processed_image_dir, img_size):
         """
@@ -80,7 +64,6 @@ class Trainer:
             processed_path = os.path.join(processed_image_dir, os.path.splitext(filename)[0] + '.png')
             processed_image_paths.append(processed_path)
             
-            # Skip if the file already exists to save time
             if not os.path.exists(processed_path):
                 image_pil = Image.open(img_path).convert("RGB").resize(img_size)
                 image_pil.save(processed_path)
@@ -90,13 +73,11 @@ class Trainer:
                 progress = int(((i + 1) / total) * 100)
                 self.update_status(f"Processed image {i+1}/{total}", stage='setup_images', progress=progress)
                 
-        self.update_status("✅ Image pre-processing complete.", stage='setup_images', progress=100)
+        self.update_status(" Image pre-processing complete.", stage='setup_images', progress=100)
         return processed_image_paths
 
     def preprocess_masks(self, rgb_mask_paths, processed_mask_dir, mapping, img_size):
-        """
-        Resizes RGB masks, converts them to single-channel class index masks, and saves them.
-        """
+
         os.makedirs(processed_mask_dir, exist_ok=True)
         self.update_status("--- Starting Mask Pre-processing ---", stage='setup_masks', progress=0)
         
@@ -108,11 +89,10 @@ class Trainer:
             processed_path = os.path.join(processed_mask_dir, os.path.splitext(filename)[0] + '.png')
             processed_mask_paths.append(processed_path)
             
-            # Skip if the file already exists
             if not os.path.exists(processed_path):
                 mask_rgb_pil = Image.open(rgb_path).convert("RGB")
                 
-                # CRITICAL: Resize mask to match image size, using NEAREST neighbor interpolation
+                # Resize mask to match image size, using NEAREST neighbor interpolation
                 mask_rgb_pil = mask_rgb_pil.resize(img_size, resample=Image.NEAREST)
 
                 mask_rgb_np = np.array(mask_rgb_pil)
@@ -133,11 +113,9 @@ class Trainer:
                 
         self.update_status("✅ Mask pre-processing complete.", stage='setup_masks', progress=100)
         return processed_mask_paths
-
+     # Mapping from RGB to class indices
     def create_color_maps(self, csv_path):
-        """
-        Reads the class definition CSV and creates a mapping from RGB colors to class indices.
-        """
+
         df = pd.read_csv(csv_path)
         df.columns = [col.strip() for col in df.columns]
         rgb_to_class_idx = {tuple([row['r'], row['g'], row['b']]): i for i, row in df.iterrows()}
@@ -157,7 +135,10 @@ class Trainer:
             x_bar = np.sum(x_coords * channel) / m00
             y_bar = np.sum(y_coords * channel) / m00
             return x_bar, y_bar, m00
+        
 
+
+        # Complex moments
         def compute_complex_moments_rgb(self, image_rgb, max_order: int = 2):
             all_channel_moments = []
             for c in range(image_rgb.shape[2]):
@@ -176,7 +157,12 @@ class Trainer:
                             moments.append(cm_raw / norm_factor if norm_factor != 0 else 0)
                 all_channel_moments.append(np.abs(np.array(moments)))
             return np.concatenate(all_channel_moments)
+        
 
+
+
+
+        # Fourier-Mellin
         def fourier_mellin_descriptor(self, image_rgb, log_polar_size=(64, 64)):
             descriptors = []
             for c in range(image_rgb.shape[2]):
@@ -205,7 +191,6 @@ class Trainer:
             return feature_map
 
     class SegmentationDataset(Dataset):
-        """PyTorch Dataset for loading images, masks, and optional invariant features."""
         def __init__(self, image_paths, mask_paths, feature_cache=None, feature_type='none'):
             self.image_paths = image_paths
             self.mask_paths = mask_paths
@@ -236,7 +221,6 @@ class Trainer:
                 return (image_tensor, feature_tensor), mask_tensor
 
     class DoubleConv(nn.Module):
-        """A block of two convolutional layers with BatchNorm and ReLU."""
         def __init__(self, in_channels, out_channels):
             super().__init__()
             self.conv = nn.Sequential(
@@ -249,21 +233,29 @@ class Trainer:
             )
         def forward(self, x):
             return self.conv(x)
+        
+
+
+
+
+
+############# Baseline U-net architecture
+
+
+
+
 
     class UNet(nn.Module):
-        """The baseline U-Net architecture."""
         def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128]):
             super().__init__()
             self.downs = nn.ModuleList()
             self.ups = nn.ModuleList()
             self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
             
-            # Encoder Path
             for feature in features:
                 self.downs.append(Trainer.DoubleConv(in_channels, feature))
                 in_channels = feature
                 
-            # Decoder Path
             for feature in reversed(features):
                 self.ups.append(nn.ConvTranspose2d(feature * 2, feature, kernel_size=2, stride=2))
                 self.ups.append(Trainer.DoubleConv(feature * 2, feature))
@@ -291,8 +283,10 @@ class Trainer:
             
             return self.final_conv(x)
 
+
+
+# U-net with feature wise linear modulation (FILM)
     class UNetWithFiLM(UNet):
-        """U-Net variant that uses Feature-wise Linear Modulation (FiLM) at the bottleneck."""
         def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30):
             super().__init__(in_channels=in_channels, num_classes=num_classes, features=features)
             bottleneck_channels = features[-1]
@@ -310,7 +304,7 @@ class Trainer:
                 skip_connections.append(x)
                 x = self.pool(x)
             
-            # FiLM modulation
+            #FiLM modulation
             film_params = self.feature_processor(ft)
             gamma, beta = torch.chunk(film_params, 2, dim=-1)
             gamma = gamma.view(gamma.size(0), -1, 1, 1)
@@ -330,10 +324,11 @@ class Trainer:
             
             return self.final_conv(x)
 
+
+
+#Unet with patch concatenation
     class UNetWithPatchFeatures(UNet):
-        """U-Net variant that injects patch-based invariant feature maps at the input."""
         def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30):
-            # The first conv layer needs to accept the original image channels + the processed feature channels
             super().__init__(in_channels=in_channels + features[0], num_classes=num_classes, features=features)
             self.patch_processor = nn.Sequential(
                 nn.Conv2d(feature_len, 64, kernel_size=3, padding=1),
@@ -355,7 +350,6 @@ class Trainer:
     #  TRAINING & VALIDATION LOOPS
 
     def train_fn(self, loader, model, optimizer, loss_fn, feature_type='none', epoch_num=0, total_epochs=0):
-        """Runs a single training epoch."""
         model.train()
         total_loss = 0
         num_batches = len(loader)
@@ -385,7 +379,6 @@ class Trainer:
         return total_loss / len(loader)
 
     def check_accuracy(self, loader, model, feature_type='none'):
-        """Calculates pixel accuracy on the validation set."""
         num_correct, num_pixels = 0, 0
         model.eval()
         with torch.no_grad():
