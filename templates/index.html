@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U-Net Segmentation App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container mt-4 mb-5">
+        <h1 class="mb-4 text-center">Geometrically Invariant U-Net Segmentation</h1>
+
+        <!-- Tab Navigation -->
+        <ul class="nav nav-tabs" id="mainTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="train-tab" data-bs-toggle="tab" data-bs-target="#train-tab-pane" type="button" role="tab" aria-controls="train-tab-pane" aria-selected="true">Train</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="benchmark-tab" data-bs-toggle="tab" data-bs-target="#benchmark-tab-pane" type="button" role="tab" aria-controls="benchmark-tab-pane" aria-selected="false">Benchmark</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="invariants-tab" data-bs-toggle="tab" data-bs-target="#invariants-tab-pane" type="button" role="tab" aria-controls="invariants-tab-pane" aria-selected="false">Geometric Invariants</button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabContent">
+            <!-- =================================================================== -->
+            <!--                       TRAINING TAB PANE                             -->
+            <!-- =================================================================== -->
+            <div class="tab-pane fade show active" id="train-tab-pane" role="tabpanel" aria-labelledby="train-tab" tabindex="0">
+                <div class="card shadow-sm mt-3">
+                    <div class="card-body">
+                        <!-- Configuration Card -->
+                        <div class="card shadow-sm mb-4">
+                            <div class="card-header">
+                                <h3>1. Configuration</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="config-form">
+                                    <div class="row">
+                                        <!-- Dataset Paths -->
+                                        <div class="col-md-6">
+                                            <h5>Dataset Paths</h5>
+                                            <div class="mb-3">
+                                                <label for="image_dir" class="form-label">Image Folder Path</label>
+                                                <div class="input-group"><input type="text" class="form-control" id="image_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#image_dir" data-type="folder">Browse...</button></div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="mask_dir" class="form-label">Mask Folder Path</label>
+                                                <div class="input-group"><input type="text" class="form-control" id="mask_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#mask_dir" data-type="folder">Browse...</button></div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="class_csv" class="form-label">Class Definition CSV Path</label>
+                                                <div class="input-group"><input type="text" class="form-control" id="class_csv" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#class_csv" data-type="file">Browse...</button></div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="output_dir" class="form-label">Output Directory Path</label>
+                                                <div class="input-group"><input type="text" class="form-control" id="output_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#output_dir" data-type="folder">Browse...</button></div>
+                                            </div>
+                                             <button type="button" id="preview-btn" class="btn btn-info">Preview Data</button>
+                                        </div>
+                                        <!-- Hyperparameters -->
+                                        <div class="col-md-6">
+                                            <h5>Hyperparameters</h5>
+                                            <div class="mb-3">
+                                                <label for="epochs" class="form-label">Epochs: <span id="epochs-val">50</span></label>
+                                                <input type="range" class="form-range" id="epochs" min="1" max="200" value="50">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="batch_size" class="form-label">Batch Size: <span id="batch-size-val">4</span></label>
+                                                <input type="range" class="form-range" id="batch_size" min="1" max="64" value="4">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="learning_rate" class="form-label">Learning Rate</label>
+                                                <input type="text" class="form-control" id="learning_rate" value="0.0001">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="img_size" class="form-label">Image Size: <span id="img-size-val">256</span></label>
+                                                <input type="range" class="form-range" id="img_size" min="128" max="512" step="32" value="256">
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="data_subset" class="form-label">Data Subset (0 for all)</label>
+                                                <input type="number" class="form-control" id="data_subset" value="50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <hr>
+                                    <div class="text-center">
+                                        <button type="submit" id="train-btn" class="btn btn-primary btn-lg">Start Training</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                        
+                        <!-- Data Preview Card -->
+                        <div id="preview-card" class="card shadow-sm mb-4" style="display:none;">
+                            <div class="card-header"><h3>2. Data Preview</h3></div>
+                            <div class="card-body"><div id="data-preview" class="row"></div></div>
+                        </div>
+
+                        <!-- Training Progress Card -->
+                        <div id="progress-card" class="card shadow-sm mb-4" style="display:none;">
+                            <div class="card-header"><h3>3. Training Progress</h3></div>
+                            <div class="card-body">
+                                <div id="setup-section" style="display:none;">
+                                    <h6 id="setup-status-title" class="mb-2">Setting up...</h6>
+                                    <div class="progress" role="progressbar"><div id="setup-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 0%">0%</div></div>
+                                </div>
+                                <div id="training-section" style="display:none;">
+                                    <h6 id="epoch-status" class="mt-3"></h6>
+                                    <div class="progress" role="progressbar"><div id="epoch-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div></div>
+                                    <h6 class="mt-3">Batch Progress:</h6>
+                                    <div class="progress" role="progressbar"><div id="batch-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%"></div></div>
+                                    <p id="batch-log" class="text-muted small mt-1"></p>
+                                </div>
+                                <h5 class="mt-4">Logs</h5>
+                                <pre id="logs" class="form-control" style="height: 200px;"></pre>
+                            </div>
+                        </div>
+
+                        <!-- Training Results Card -->
+                        <div id="results-card" class="card shadow-sm mb-4" style="display:none;">
+                            <div class="card-header"><h3>4. Training Results</h3></div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6"><canvas id="accuracyChart"></canvas></div>
+                                    <div class="col-md-6"><canvas id="lossChart"></canvas></div>
+                                </div>
+                                <div id="final-plot-container" class="text-center mt-4"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================================================================== -->
+            <!--                      BENCHMARK TAB PANE                             -->
+            <!-- =================================================================== -->
+            <div class="tab-pane fade" id="benchmark-tab-pane" role="tabpanel" aria-labelledby="benchmark-tab" tabindex="0">
+                <div class="card shadow-sm mt-3">
+                    <div class="card-header"><h3>Model Benchmarking</h3></div>
+                    <div class="card-body">
+                        <p>This tool evaluates the models saved from the training process. Please select the <strong>Output Directory</strong> where the models were saved and the corresponding <strong>Class CSV</strong> file. Hyperparameters like Image Size and Data Subset will be reused from the 'Train' tab.</p>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="benchmark_output_dir" class="form-label"><strong>Output Directory (with saved models)</strong></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="benchmark_output_dir" required placeholder="Select the main output folder...">
+                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#benchmark_output_dir" data-type="folder">Browse...</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="benchmark_class_csv" class="form-label"><strong>Class Definition CSV</strong></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="benchmark_class_csv" required placeholder="Select the class definition file...">
+                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#benchmark_class_csv" data-type="file">Browse...</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center mb-4">
+                            <button id="benchmark-btn" class="btn btn-success btn-lg">Start Benchmarking</button>
+                        </div>
+                        
+                        <div id="benchmark-progress-card" class="card shadow-sm mb-4" style="display:none;">
+                            <div class="card-header"><h5>Benchmarking Progress</h5></div>
+                            <div class="card-body"><h6>Logs</h6><pre id="benchmark-logs" class="form-control" style="height: 250px;"></pre></div>
+                        </div>
+
+                        <div id="benchmark-results-card" class="card shadow-sm" style="display:none;">
+                            <div class="card-header"><h5>Benchmarking Results</h5></div>
+                            <div id="benchmark-results-container" class="card-body"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================================================================== -->
+            <!--                  GEOMETRIC INVARIANTS TAB PANE                      -->
+            <!-- =================================================================== -->
+            <div class="tab-pane fade" id="invariants-tab-pane" role="tabpanel" aria-labelledby="invariants-tab" tabindex="0">
+                <div class="card shadow-sm mt-3">
+                    <div class="card-header"><h3>Geometric Invariant Calculator</h3></div>
+                    <div class="card-body">
+                        <p>Upload an image to visually inspect the invariance of different moment-based descriptors under geometric transformations.</p>
+                        
+                        <!-- Step 1: Upload -->
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <label for="invariant_image_upload" class="form-label"><strong>1. Upload an Image</strong></label>
+                                <div class="input-group">
+                                    <input class="form-control" type="file" id="invariant_image_upload" accept="image/jpeg,image/png">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div id="invariant-image-preview-container" class="text-center" style="display: none;">
+                                    <img id="invariant-image-preview" src="" class="img-thumbnail" style="max-height: 150px;" alt="Image Preview">
+                                    <p id="invariant-image-filename" class="text-muted small mt-1"></p>
+                                </div>
+                            </div>
+                        </div>
+                        <hr>
+                        
+                        <!-- Step 2: Choose Method and Calculate -->
+                        <div>
+                            <label class="form-label"><strong>2. Choose Method & Calculate</strong></label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="invariantMethod" id="methodCM" value="cm" checked>
+                                <label class="form-check-label" for="methodCM">Complex Moments (CM)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="invariantMethod" id="methodFM" value="fm">
+                                <label class="form-check-label" for="methodFM">Fourier-Mellin (FM)</label>
+                            </div>
+                            <div class="text-center mt-3">
+                                <button id="invariant-calculate-btn" class="btn btn-primary btn-lg" disabled>Calculate Invariants</button>
+                            </div>
+                        </div>
+                        <hr>
+
+                        <!-- Step 3: Results -->
+                        <div id="invariant-progress-card" class="card shadow-sm mb-4" style="display:none;">
+                            <div class="card-header"><h5>Calculation Progress</h5></div>
+                            <div class="card-body"><h6>Logs</h6><pre id="invariant-logs" class="form-control" style="height: 150px;"></pre></div>
+                        </div>
+
+                        <div id="invariant-results-card" style="display:none;">
+                            <h3 class="text-center">Results</h3>
+                            <div id="invariant-results-container" class="row">
+                                <!-- Results will be injected here by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

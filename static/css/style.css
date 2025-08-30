@@ -1,0 +1,30 @@
+/* static/css/style.css */
+
+body {
+    background-color: #f0f2f5;
+}
+
+.card {
+    border-radius: 0.75rem;
+    border: none;
+}
+
+.card-header {
+    background-color: #343a40;
+    color: white;
+    border-top-left-radius: 0.75rem;
+    border-top-right-radius: 0.75rem;
+}
+
+#logs {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    background-color: #212529;
+    color: #00ff41;
+}
+
+pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+}

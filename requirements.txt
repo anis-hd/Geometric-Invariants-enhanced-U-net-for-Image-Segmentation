@@ -1,0 +1,14 @@
+Flask
+Flask-SocketIO
+eventlet
+numpy
+pandas
+opencv-python-headless
+Pillow
+torch
+torchvision
+scikit-learn
+matplotlib
+seaborn
+tqdm
+werkzeug
