@@ -121,11 +121,14 @@ http://127.0.0.1:5000
 ### Step 2: The "Train" Tab
 
 - **Configure Paths:** Select Image Folder, Mask Folder, Class Definition CSV, and Output Directory.
-![Demo Screenshot](assets/paths.png)
+![paths](assets/paths.png)
 
 - **Set Hyperparameters:** Adjust epochs, batch size, learning rate, image size, and data subset.
 - **Preview Data (optional):** Check sample images and masks before training.
+![preview](assets/preview.png)
+
 - **Start Training:** Progress logs and charts update in real time (validation accuracy, training loss).
+![training](assets/training.png)
 
 ---
 
