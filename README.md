@@ -12,7 +12,6 @@ The application is built with **Python, Flask, and PyTorch** and features a mult
 
 ## Table of Contents
 
-- [Features](#features)
 - [Project Structure](#project-structure)
 - [Setup and Installation](#setup-and-installation)
   - [Prerequisites](#prerequisites)
@@ -27,17 +26,6 @@ The application is built with **Python, Flask, and PyTorch** and features a mult
   - [RGB Masks](#rgb-masks)
   - [Class Definition CSV](#class-definition-csv)
 
----
-
-## Features
-
-- **Fully Interactive GUI:** Configure and run the pipeline without command-line arguments.
-- **Native File/Folder Picker:** Use your OS’s file explorer to select paths safely.
-- **Real-Time Feedback:** Monitor logs, progress bars, and charts live during training and benchmarking.
-- **Multi-Model Training:** Compare baseline U-Net with advanced variants (FiLM, Patch-based feature injection).
-- **Comprehensive Benchmarking:** Automatic results tables, t-SNE plots, robustness charts, and segmentation comparisons.
-- **Educational Tools:** Explore invariance properties of geometric moments interactively.
-- **Self-Contained & Portable:** Run locally on any machine with the required dependencies.
 
 ---
 
