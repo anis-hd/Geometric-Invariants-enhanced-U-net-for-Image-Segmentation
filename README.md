@@ -129,18 +129,30 @@ http://127.0.0.1:5000
 
 - **Start Training:** Progress logs and charts update in real time (validation accuracy, training loss).
 ![training](assets/training.png)
+![results](assets/results.png)
+
 
 ---
 
 ### Step 3: The "Benchmark" Tab
 
 - **Configure Paths:** Select the training output directory and Class Definition CSV.
+![bench](assets/bench.png)
+
 - **Start Benchmarking:** Run evaluation with live logs.
 - **View Results:**
   - Quantitative Results Table (Accuracy, IoU, Dice)
+  ![table](assets/table.png)
+
   - t-SNE plots of invariant features
+  ![tsne](assets/tsne.png)
+
   - Robustness charts under transformations
+  ![robust](assets/robust.png)
+
   - Segmentation comparison grids
+  ![grid](assets/grid.png)
+
 
 ---
 
@@ -148,7 +160,11 @@ http://127.0.0.1:5000
 
 - **Upload an Image:** Supported formats: `.jpg`, `.png`
 - **Choose Method:** Complex Moments or Fourier-Mellin
+  ![geo](assets/geo.png)
+
 - **Calculate & Analyze:** View original + transformed images, plots of descriptors, and cosine similarity scores.
+  ![progress](assets/progress.png)
+  ![result](assets/result.png)
 
 ---
 
@@ -179,3 +195,6 @@ water,0,0,255
 building,255,0,0
 vegetation,0,255,0
 ```
+
+
+This web app was tested with https://www.kaggle.com/datasets/bulentsiyah/semantic-drone-dataset but it's generalizable to any dataset.
