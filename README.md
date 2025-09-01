@@ -6,7 +6,9 @@ The application is built with **Python, Flask, and PyTorch** and features a mult
 
 1. **Training:** Configure datasets, set hyperparameters, and train multiple U-Net models in real-time.
 2. **Benchmarking:** Evaluate trained models on various metrics (Accuracy, IoU, Dice) and test their robustness against geometric transformations.
-3. **Geometric Invariants:** Visually explore the properties of moment-based image descriptors like Complex Moments and Fourier-Mellin moments.
+3. **Inference:** Upload a single image and get an immediate visual segmentation from all trained models to qualitatively assess their performance.
+
+4. **Geometric Invariants:** Visually explore the properties of moment-based image descriptors like Complex Moments and Fourier-Mellin moments.
 
 ---
 
