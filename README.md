@@ -156,6 +156,21 @@ http://127.0.0.1:5000
 
 ---
 
+### Step 4: The "Inference" Tab
+
+- **Select Output Directory:** Choose the folder containing your trained models and configuration (`training_config.json`).
+- **Upload Image:** Supported formats: `.jpg`, `.png`
+- **Run Inference:** The selected image is processed by all available models (U-Net variants). Progress and logs are displayed in real time.
+- **View Results:**
+  - **Original Image:** Preview of the uploaded image.
+  - **Geometric Invariants:** Plots of Complex Moments and Fourier-Mellin descriptors for the image.
+  - **Segmentation Results:** Predicted masks from each model, visualized with color maps from your class CSV.
+  - **Download Outputs:** Segmentation masks are saved in `/static/outputs/` for further analysis.
+
+![inference](assets/inference.png)
+
+---
+
 ## File and Folder Structure for Your Data
 
 ### Input Images
