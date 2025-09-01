@@ -200,4 +200,4 @@ vegetation,0,255,0
 ```
 
 
-This web app was tested with https://www.kaggle.com/datasets/bulentsiyah/semantic-drone-dataset but it's generalizable to any dataset.
+This web app was tested with https://www.kaggle.com/datasets/bulentsiyah/semantic-drone-dataset but it's generalizable to any semantic segmentation dataset with the same structure.
