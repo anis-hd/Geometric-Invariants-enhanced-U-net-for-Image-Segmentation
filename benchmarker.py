@@ -1,3 +1,5 @@
+# benchmarker.py
+
 import os
 import numpy as np
 import pandas as pd
@@ -19,139 +21,10 @@ from sklearn.manifold import TSNE
 import pickle
 import random
 import eventlet
+import json
 
-#model architecture must be identical to the one used in training
-
-class DoubleConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
-        )
-    def forward(self, x):
-        return self.conv(x)
-    
-
-
-
-
-
-
-
-
-# Baseline U-net
-
-
-
-
-
-
-class UNet(nn.Module):
-    def __init__(self, i=3, o=23, f=[16, 32, 64, 128]):
-        super().__init__()
-        self.downs = nn.ModuleList()
-        self.ups = nn.ModuleList()
-        self.pool = nn.MaxPool2d(2, 2)
-        in_channels = i
-        for feature in f:
-            self.downs.append(DoubleConv(in_channels, feature))
-            in_channels = feature
-        for feature in reversed(f):
-            self.ups.append(nn.ConvTranspose2d(feature * 2, feature, 2, 2))
-            self.ups.append(DoubleConv(feature * 2, feature))
-        self.bottleneck = DoubleConv(f[-1], f[-1] * 2)
-        self.final_conv = nn.Conv2d(f[0], o, 1)
-
-    def forward(self, x):
-        s = []
-        for d in self.downs:
-            x = d(x)
-            s.append(x)
-            x = self.pool(x)
-        x = self.bottleneck(x)
-        s = s[::-1]
-        for idx in range(0, len(self.ups), 2):
-            x = self.ups[idx](x)
-            skip = s[idx // 2]
-            if x.shape != skip.shape:
-                x = TF.resize(x, size=skip.shape[2:])
-            x = torch.cat((skip, x), dim=1)
-            x = self.ups[idx + 1](x)
-        return self.final_conv(x)
-
-
-
-
-
-
-###### U-net with feature wise linear modulation (FILM)
-
-
-
-
-
-class UNetWithFiLM(UNet):
-    def __init__(self, i=3, o=23, f=[16, 32, 64, 128], feature_len=30):
-        super().__init__(i, o, f)
-        bottleneck_channels = f[-1]
-        self.feature_processor = nn.Sequential(
-            nn.Linear(feature_len, 128),
-            nn.ReLU(inplace=True),
-            nn.Linear(128, bottleneck_channels * 2)
-        )
-        self.bottleneck = DoubleConv(bottleneck_channels, f[-1] * 2)
-
-    def forward(self, x, ft):
-        s = []
-        for d in self.downs:
-            x = d(x)
-            s.append(x)
-            x = self.pool(x)
-        film_params = self.feature_processor(ft)
-        gamma, beta = torch.chunk(film_params, 2, dim=-1)
-        gamma = gamma.view(gamma.size(0), -1, 1, 1)
-        beta = beta.view(beta.size(0), -1, 1, 1)
-        x = gamma * x + beta
-        x = self.bottleneck(x)
-        s = s[::-1]
-        for idx in range(0, len(self.ups), 2):
-            x = self.ups[idx](x)
-            skip = s[idx // 2]
-            if x.shape != skip.shape:
-                x = TF.resize(x, size=skip.shape[2:])
-            x = torch.cat((skip, x), dim=1)
-            x = self.ups[idx + 1](x)
-        return self.final_conv(x)
-
-
-
-########## U-net with patch concatenation
-
-
-
-
-
-
-class UNetWithPatchFeatures(UNet):
-    def __init__(self, i=3, o=23, f=[16, 32, 64, 128], feature_len=30):
-        super().__init__(i + f[0], o, f)
-        self.patch_processor = nn.Sequential(
-            nn.Conv2d(feature_len, 64, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, f[0], 1)
-        )
-    def forward(self, x, ft_map):
-        processed_ft = self.patch_processor(ft_map)
-        processed_ft = TF.resize(processed_ft, size=x.shape[2:])
-        x = torch.cat([x, processed_ft], dim=1)
-        return super().forward(x)
-
-# BENCHMARKER CLASS
+# Import the unified model classes from models.py
+from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
 
 class Benchmarker:
 
@@ -214,7 +87,6 @@ class Benchmarker:
                 return (image_tensor, feature_tensor), mask_tensor
 
     def iou_dice_score(self, preds, targets, num_classes, smooth=1e-6):
-        #calculate IoU and dice score
         iou_scores, dice_scores = [], []
         preds = torch.argmax(preds, dim=1).view(-1)
         targets = targets.view(-1)
@@ -228,8 +100,6 @@ class Benchmarker:
             dice_scores.append(dice.item())
         return np.mean(iou_scores), np.mean(dice_scores)
     
-
-
     def evaluate_model(self, loader, model, num_classes, feature_type):
         num_correct, num_pixels = 0, 0
         total_iou, total_dice = 0, 0
@@ -257,9 +127,6 @@ class Benchmarker:
         mean_dice = (total_dice / len(loader)) * 100
         return accuracy.item(), mean_iou, mean_dice
     
-
-
-
     def plot_and_save(self, plot_func, *args, filename):
         plt.figure()
         plot_func(*args)
@@ -270,13 +137,6 @@ class Benchmarker:
         self.update_log(f"✅ {filename} generated.")
         self.socketio.emit('benchmark_result', {'type': 'plot', 'url': relative_path, 'title': filename.replace('_', ' ').replace('.png', '').title()})
 
-
-
-
-
-
-
-    #t-sne plot
     def _tsne_plotter(self, features_cache, all_mask_paths, title):
         paths_in_cache = list(features_cache.keys())
         features = np.array([features_cache[p] for p in paths_in_cache])
@@ -294,13 +154,6 @@ class Benchmarker:
         plt.xlabel("t-SNE Component 1")
         plt.ylabel("t-SNE Component 2")
 
-
-
-
-
-
-
-#visualize model segmentation grid
     def _comparison_grid_plotter(self, sample_data, models_dict, color_map):
         original_image = Image.open(sample_data['img_path']).convert("RGB")
         original_mask = Image.open(sample_data['mask_path']).convert("L")
@@ -350,8 +203,6 @@ class Benchmarker:
             ax.axis('off')
         plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 
-
-# calculates and plots performance under transformations
     def _robustness_plotter(self, results_dict, metric):
         model_names = list(results_dict.keys())
         transform_names = list(next(iter(results_dict.values())).keys())
@@ -368,12 +219,29 @@ class Benchmarker:
         plt.legend()
         plt.grid(axis='y', linestyle='--')
 
-
-# MAIN
     def run(self):
         try:
+            # Load the saved training config first
+            self.update_log("--- 1. Loading Training Configuration ---")
+            config_path = os.path.join(self.config['output_dir'], "training_config.json")
+
+            if not os.path.exists(config_path):
+                error_msg = f"Configuration file not found at {config_path}. Please run training for this output directory first."
+                self.update_log(f"🔴 ERROR: {error_msg}")
+                self.socketio.emit('benchmark_error', {'error': error_msg})
+                return
+
+            with open(config_path, 'r') as f:
+                training_config = json.load(f)
+
+            keys_to_override = ['unet_features', 'film_hidden_dim', 'patch_hidden_dim', 'img_size', 'data_subset']
+            for key in keys_to_override:
+                if key in training_config:
+                    self.config[key] = training_config[key]
+            self.update_log("✅ Successfully loaded and applied training configuration.")
+
             # Load Data, Maps, and Caches
-            self.update_log("--- 1. Loading Data, Maps, and Caches ---")
+            self.update_log("--- 2. Loading Data, Maps, and Caches ---")
             class_idx_to_rgb, num_classes = self.create_color_maps(self.config['class_csv'])
             all_image_files = sorted(glob(os.path.join(self.config['processed_image_dir'], '*.png')))
             all_mask_files = sorted(glob(os.path.join(self.config['processed_mask_dir'], '*.png')))
@@ -388,16 +256,18 @@ class Benchmarker:
             self.update_log(" All feature caches loaded.")
 
             # Load Pre-Trained Models
-            self.update_log("--- 2. Loading Pre-Trained Models ---")
+            self.update_log("--- 3. Loading Pre-Trained Models ---")
             cm_global_len = next(iter(feature_caches['cm_global'].values())).shape[0]
             fmt_global_len = next(iter(feature_caches['fmt_global'].values())).shape[0]
             cm_patch_len = next(iter(feature_caches['cm_patch'].values())).shape[-1]
+            
             models_to_evaluate = {
-                "Baseline": {"model": UNet(o=num_classes), "feature_type": "none", "cache_key": None},
-                "FiLM_CM": {"model": UNetWithFiLM(o=num_classes, feature_len=cm_global_len), "feature_type": "global", "cache_key": "cm_global"},
-                "FiLM_FMT": {"model": UNetWithFiLM(o=num_classes, feature_len=fmt_global_len), "feature_type": "global", "cache_key": "fmt_global"},
-                "Patch_CM": {"model": UNetWithPatchFeatures(o=num_classes, feature_len=cm_patch_len), "feature_type": "patch", "cache_key": "cm_patch"},
+                "Baseline": {"model": UNet(num_classes=num_classes, features=self.config['unet_features']), "feature_type": "none", "cache_key": None},
+                "FiLM_CM": {"model": UNetWithFiLM(num_classes=num_classes, feature_len=cm_global_len, features=self.config['unet_features'], film_hidden_dim=self.config['film_hidden_dim']), "feature_type": "global", "cache_key": "cm_global"},
+                "FiLM_FMT": {"model": UNetWithFiLM(num_classes=num_classes, feature_len=fmt_global_len, features=self.config['unet_features'], film_hidden_dim=self.config['film_hidden_dim']), "feature_type": "global", "cache_key": "fmt_global"},
+                "Patch_CM": {"model": UNetWithPatchFeatures(num_classes=num_classes, feature_len=cm_patch_len, features=self.config['unet_features'], patch_hidden_dim=self.config['patch_hidden_dim']), "feature_type": "patch", "cache_key": "cm_patch"},
             }
+
             for name, config in models_to_evaluate.items():
                 model_path = os.path.join(self.config['saved_models_dir'], f"{name}_model.pth")
                 if not os.path.exists(model_path):
@@ -408,12 +278,12 @@ class Benchmarker:
             self.update_log(" All pre-trained models loaded.")
 
             # Feature Visualization (t-SNE) 
-            self.update_log("--- 3.  Feature Visualization (t-SNE) ---")
+            self.update_log("--- 4.  Feature Visualization (t-SNE) ---")
             self.plot_and_save(self._tsne_plotter, feature_caches['cm_global'], all_mask_files, "t-SNE of Global Complex Moments", filename="tsne_cm_global.png")
             self.plot_and_save(self._tsne_plotter, feature_caches['fmt_global'], all_mask_files, "t-SNE of Global Fourier-Mellin", filename="tsne_fmt_global.png")
 
             # Quantitative Evaluation
-            self.update_log("--- 4.  Quantitative Evaluation ---")
+            self.update_log("--- 5.  Quantitative Evaluation ---")
             img_size = (self.config['img_size'], self.config['img_size'])
             transformations = {
                 "Original": T.Compose([T.Resize(img_size)]),
@@ -434,7 +304,7 @@ class Benchmarker:
             self.socketio.emit('benchmark_result', {'type': 'table', 'data': robustness_results})
 
             #Visualize Segmentation Outputs
-            self.update_log("--- 5.  Visualize Segmentation Outputs ---")
+            self.update_log("--- 6.  Visualize Segmentation Outputs ---")
             sample_idx = random.randint(0, len(X_val_paths) - 1)
             sample_img_path = X_val_paths[sample_idx]
             sample_data = {'img_path': sample_img_path, 'mask_path': y_val_paths[sample_idx]}
@@ -443,7 +313,7 @@ class Benchmarker:
             self.plot_and_save(self._comparison_grid_plotter, sample_data, models_to_evaluate, class_idx_to_rgb, filename="segmentation_comparison.png")
             
             #Plot Final Robustness Charts 
-            self.update_log("--- 6. Plot Final Robustness Charts ---")
+            self.update_log("--- 7. Plot Final Robustness Charts ---")
             self.plot_and_save(self._robustness_plotter, robustness_results, 'accuracy', filename="robustness_accuracy.png")
             self.plot_and_save(self._robustness_plotter, robustness_results, 'iou', filename="robustness_iou.png")
 

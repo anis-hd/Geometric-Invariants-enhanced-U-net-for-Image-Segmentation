@@ -116,7 +116,7 @@ http://127.0.0.1:5000
 ![preview](assets/preview.png)
 
 - **Start Training:** Progress logs and charts update in real time (validation accuracy, training loss).
-![training](assets/training.png)
+![training](assets/train_gif.gif)
 ![results](assets/results.png)
 
 

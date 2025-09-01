@@ -5,22 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>U-Net Segmentation App</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Added Bootstrap Icons for a nicer UI -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container mt-4 mb-5">
-        <h1 class="mb-4 text-center">Geometrically Invariant U-Net Segmentation</h1>
+        <h1 class="mb-4 text-center"><i class="bi bi-boxes"></i> Geometrically Invariant U-Net Segmentation</h1>
 
         <!-- Tab Navigation -->
         <ul class="nav nav-tabs" id="mainTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="train-tab" data-bs-toggle="tab" data-bs-target="#train-tab-pane" type="button" role="tab" aria-controls="train-tab-pane" aria-selected="true">Train</button>
+                <button class="nav-link active" id="train-tab" data-bs-toggle="tab" data-bs-target="#train-tab-pane" type="button" role="tab" aria-controls="train-tab-pane" aria-selected="true"><i class="bi bi-sliders"></i> Train</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="benchmark-tab" data-bs-toggle="tab" data-bs-target="#benchmark-tab-pane" type="button" role="tab" aria-controls="benchmark-tab-pane" aria-selected="false">Benchmark</button>
+                <button class="nav-link" id="inference-tab" data-bs-toggle="tab" data-bs-target="#inference-tab-pane" type="button" role="tab" aria-controls="inference-tab-pane" aria-selected="false"><i class="bi bi-image"></i> Inference</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="invariants-tab" data-bs-toggle="tab" data-bs-target="#invariants-tab-pane" type="button" role="tab" aria-controls="invariants-tab-pane" aria-selected="false">Geometric Invariants</button>
+                <button class="nav-link" id="benchmark-tab" data-bs-toggle="tab" data-bs-target="#benchmark-tab-pane" type="button" role="tab" aria-controls="benchmark-tab-pane" aria-selected="false"><i class="bi bi-graph-up-arrow"></i> Benchmark</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="invariants-tab" data-bs-toggle="tab" data-bs-target="#invariants-tab-pane" type="button" role="tab" aria-controls="invariants-tab-pane" aria-selected="false"><i class="bi bi-compass"></i> Geometric Invariants</button>
             </li>
         </ul>
 
@@ -45,21 +50,21 @@
                                             <h5>Dataset Paths</h5>
                                             <div class="mb-3">
                                                 <label for="image_dir" class="form-label">Image Folder Path</label>
-                                                <div class="input-group"><input type="text" class="form-control" id="image_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#image_dir" data-type="folder">Browse...</button></div>
+                                                <div class="input-group"><input type="text" class="form-control" id="image_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#image_dir" data-type="folder"><i class="bi bi-folder2-open"></i> Browse...</button></div>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="mask_dir" class="form-label">Mask Folder Path</label>
-                                                <div class="input-group"><input type="text" class="form-control" id="mask_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#mask_dir" data-type="folder">Browse...</button></div>
+                                                <div class="input-group"><input type="text" class="form-control" id="mask_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#mask_dir" data-type="folder"><i class="bi bi-folder2-open"></i> Browse...</button></div>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="class_csv" class="form-label">Class Definition CSV Path</label>
-                                                <div class="input-group"><input type="text" class="form-control" id="class_csv" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#class_csv" data-type="file">Browse...</button></div>
+                                                <div class="input-group"><input type="text" class="form-control" id="class_csv" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#class_csv" data-type="file"><i class="bi bi-file-earmark-text"></i> Browse...</button></div>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="output_dir" class="form-label">Output Directory Path</label>
-                                                <div class="input-group"><input type="text" class="form-control" id="output_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#output_dir" data-type="folder">Browse...</button></div>
+                                                <div class="input-group"><input type="text" class="form-control" id="output_dir" required placeholder="Click Browse to select..."><button class="btn btn-outline-secondary browse-btn" type="button" data-target="#output_dir" data-type="folder"><i class="bi bi-folder2-open"></i> Browse...</button></div>
                                             </div>
-                                             <button type="button" id="preview-btn" class="btn btn-info">Preview Data</button>
+                                             <button type="button" id="preview-btn" class="btn btn-info"><i class="bi bi-eye"></i> Preview Data</button>
                                         </div>
                                         <!-- Hyperparameters -->
                                         <div class="col-md-6">
@@ -84,11 +89,41 @@
                                                 <label for="data_subset" class="form-label">Data Subset (0 for all)</label>
                                                 <input type="number" class="form-control" id="data_subset" value="50">
                                             </div>
+                                            <hr>
+                                            <!-- ADVANCED HYPERPARAMETERS ACCORDION -->
+                                            <div class="accordion" id="advancedParamsAccordion">
+                                                <div class="accordion-item">
+                                                    <h2 class="accordion-header" id="headingOne">
+                                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdvanced" aria-expanded="false" aria-controls="collapseAdvanced">
+                                                            Advanced Model Architecture
+                                                        </button>
+                                                    </h2>
+                                                    <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#advancedParamsAccordion">
+                                                        <div class="accordion-body">
+                                                            <div class="mb-3">
+                                                                <label for="unet_features" class="form-label">U-Net Feature Channels</label>
+                                                                <input type="text" class="form-control" id="unet_features" value="16, 32, 64, 128" placeholder="e.g., 16, 32, 64, 128">
+                                                                <div class="form-text">Comma-separated list of channel counts for each U-Net encoder level.</div>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label for="film_hidden_dim" class="form-label">FiLM Hidden Dimension</label>
+                                                                <input type="number" class="form-control" id="film_hidden_dim" value="128">
+                                                                <div class="form-text">Hidden layer size in the FiLM feature processor.</div>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label for="patch_hidden_dim" class="form-label">Patch Processor Hidden Channels</label>
+                                                                <input type="number" class="form-control" id="patch_hidden_dim" value="64">
+                                                                <div class="form-text">Hidden channel count in the Patch feature processor.</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     <hr>
                                     <div class="text-center">
-                                        <button type="submit" id="train-btn" class="btn btn-primary btn-lg">Start Training</button>
+                                        <button type="submit" id="train-btn" class="btn btn-primary btn-lg"><i class="bi bi-play-circle"></i> Start Training</button>
                                     </div>
                                 </form>
                             </div>
@@ -136,33 +171,112 @@
             </div>
 
             <!-- =================================================================== -->
+            <!--                       INFERENCE TAB PANE                            -->
+            <!-- =================================================================== -->
+            <div class="tab-pane fade" id="inference-tab-pane" role="tabpanel" aria-labelledby="inference-tab" tabindex="0">
+                <div class="card shadow-sm mt-3">
+                    <div class="card-header"><h3>Single Image Inference</h3></div>
+                    <div class="card-body">
+                        <p>Run a single image through the trained models. Select the <strong>Output Directory</strong> to automatically load the models and their exact training configuration.</p>
+                        <!-- Step 1: Config -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="inference_output_dir" class="form-label"><strong>Output Directory (with saved models)</strong></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="inference_output_dir" required placeholder="Select folder containing models and config...">
+                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#inference_output_dir" data-type="folder"><i class="bi bi-folder2-open"></i> Browse...</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="inference_class_csv" class="form-label"><strong>Class Definition CSV</strong></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="inference_class_csv" required placeholder="Select the corresponding class file...">
+                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#inference_class_csv" data-type="file"><i class="bi bi-file-earmark-text"></i> Browse...</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loaded Configuration Viewer -->
+                        <div id="inference-config-card" class="card shadow-sm mb-3" style="display:none;">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Loaded Training Configuration</h5>
+                            </div>
+                            <div class="card-body">
+                                <pre id="inference-config-display" class="form-control" style="height: 180px; background-color: #f8f9fa; font-size: 0.8em;"></pre>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 2: Upload Image -->
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <label for="inference_image_upload" class="form-label"><strong>Upload an Image for Inference</strong></label>
+                                <input class="form-control" type="file" id="inference_image_upload" accept="image/jpeg,image/png">
+                            </div>
+                            <div class="col-md-6 text-center">
+                                <img id="inference-image-preview" src="" class="img-thumbnail" style="max-height: 150px; display: none;" alt="Image Preview">
+                            </div>
+                        </div>
+                        <hr>
+                        <!-- Step 3: Run -->
+                        <div class="text-center">
+                             <button id="inference-btn" class="btn btn-primary btn-lg" disabled><i class="bi bi-play-fill"></i> Run Inference</button>
+                        </div>
+                         
+                        <!-- Step 4: Progress & Results -->
+                        <div id="inference-progress-card" class="card shadow-sm my-4" style="display:none;">
+                            <div class="card-header"><h5>Inference Progress</h5></div>
+                            <div class="card-body"><h6>Logs</h6><pre id="inference-logs" class="form-control" style="height: 150px;"></pre></div>
+                        </div>
+
+                        <div id="inference-results-card" class="mt-4" style="display:none;">
+                            <h3 class="text-center">Inference Results</h3>
+                            <div id="inference-results-container" class="container-fluid">
+                                <!-- JS will populate this -->
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- =================================================================== -->
             <!--                      BENCHMARK TAB PANE                             -->
             <!-- =================================================================== -->
             <div class="tab-pane fade" id="benchmark-tab-pane" role="tabpanel" aria-labelledby="benchmark-tab" tabindex="0">
                 <div class="card shadow-sm mt-3">
                     <div class="card-header"><h3>Model Benchmarking</h3></div>
                     <div class="card-body">
-                        <p>This tool evaluates the models saved from the training process. Please select the <strong>Output Directory</strong> where the models were saved and the corresponding <strong>Class CSV</strong> file. Hyperparameters like Image Size and Data Subset will be reused from the 'Train' tab.</p>
+                        <p>This tool loads the models and the exact training configuration from the selected <strong>Output Directory</strong>. All architecture settings will be loaded automatically from the <code>training_config.json</code> file in that directory.</p>
                         
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label for="benchmark_output_dir" class="form-label"><strong>Output Directory (with saved models)</strong></label>
                                 <div class="input-group">
-                                    <input type="text" class="form-control" id="benchmark_output_dir" required placeholder="Select the main output folder...">
-                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#benchmark_output_dir" data-type="folder">Browse...</button>
+                                    <input type="text" class="form-control" id="benchmark_output_dir" required placeholder="Select folder containing models and config...">
+                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#benchmark_output_dir" data-type="folder"><i class="bi bi-folder2-open"></i> Browse...</button>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <label for="benchmark_class_csv" class="form-label"><strong>Class Definition CSV</strong></label>
                                 <div class="input-group">
-                                    <input type="text" class="form-control" id="benchmark_class_csv" required placeholder="Select the class definition file...">
-                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#benchmark_class_csv" data-type="file">Browse...</button>
+                                    <input type="text" class="form-control" id="benchmark_class_csv" required placeholder="Select the corresponding class file...">
+                                    <button class="btn btn-outline-secondary browse-btn" type="button" data-target="#benchmark_class_csv" data-type="file"><i class="bi bi-file-earmark-text"></i> Browse...</button>
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Loaded Configuration Viewer -->
+                        <div id="benchmark-config-card" class="card shadow-sm mb-3" style="display:none;">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Loaded Training Configuration</h5>
+                            </div>
+                            <div class="card-body">
+                                <pre id="benchmark-config-display" class="form-control" style="height: 180px; background-color: #f8f9fa; font-size: 0.8em;"></pre>
                             </div>
                         </div>
                         
                         <div class="text-center mb-4">
-                            <button id="benchmark-btn" class="btn btn-success btn-lg">Start Benchmarking</button>
+                            <button id="benchmark-btn" class="btn btn-success btn-lg"><i class="bi bi-play-fill"></i> Start Benchmarking</button>
                         </div>
                         
                         <div id="benchmark-progress-card" class="card shadow-sm mb-4" style="display:none;">
@@ -216,7 +330,7 @@
                                 <label class="form-check-label" for="methodFM">Fourier-Mellin (FM)</label>
                             </div>
                             <div class="text-center mt-3">
-                                <button id="invariant-calculate-btn" class="btn btn-primary btn-lg" disabled>Calculate Invariants</button>
+                                <button id="invariant-calculate-btn" class="btn btn-primary btn-lg" disabled><i class="bi bi-calculator"></i> Calculate Invariants</button>
                             </div>
                         </div>
                         <hr>

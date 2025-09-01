@@ -21,7 +21,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const batchLog = document.getElementById('batch-log');
     const finalPlotContainer = document.getElementById('final-plot-container');
     let accuracyChart, lossChart;
-    
+
+    // --- INFERENCE UI Elements ---
+    const inferenceBtn = document.getElementById('inference-btn');
+    const inferenceImageUpload = document.getElementById('inference_image_upload');
+    const inferenceImagePreview = document.getElementById('inference-image-preview');
+    const inferenceProgressCard = document.getElementById('inference-progress-card');
+    const inferenceLogs = document.getElementById('inference-logs');
+    const inferenceResultsCard = document.getElementById('inference-results-card');
+    const inferenceResultsContainer = document.getElementById('inference-results-container');
+    let inferenceUploadedImagePath = null;
+
     // --- BENCHMARKING UI Elements ---
     const benchmarkBtn = document.getElementById('benchmark-btn');
     const benchmarkProgressCard = document.getElementById('benchmark-progress-card');
@@ -56,6 +66,13 @@ document.addEventListener('DOMContentLoaded', () => {
         finalPlotContainer.innerHTML = '';
         if (accuracyChart) accuracyChart.destroy();
         if (lossChart) lossChart.destroy();
+    }
+    
+    function resetInferenceUI() {
+        inferenceProgressCard.style.display = 'none';
+        inferenceResultsCard.style.display = 'none';
+        inferenceLogs.innerHTML = '';
+        inferenceResultsContainer.innerHTML = '';
     }
     
     function resetBenchmarkUI() {
@@ -105,11 +122,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- General Socket.IO Listeners ---
     socket.on('connect', () => {
         logMessage(logs, '✅ Connected to server. Ready to train.');
+        logMessage(inferenceLogs, '✅ Connected to server. Ready for inference.');
         logMessage(benchmarkLogs, '✅ Connected to server. Ready to benchmark.');
         logMessage(invariantLogs, '✅ Connected to server. Ready to calculate.');
     });
     socket.on('disconnect', () => {
         logMessage(logs, '⚠️ Disconnected from server. Please refresh the page.');
+        logMessage(inferenceLogs, '⚠️ Disconnected from server. Please refresh the page.');
         logMessage(benchmarkLogs, '⚠️ Disconnected from server. Please refresh the page.');
         logMessage(invariantLogs, '⚠️ Disconnected from server. Please refresh the page.');
     });
@@ -175,6 +194,68 @@ document.addEventListener('DOMContentLoaded', () => {
         trainBtn.innerText = 'Start Training';
         alert(`An error occurred during training: ${data.error}`);
     });
+
+    // --- INFERENCE Socket.IO Listeners ---
+    socket.on('inference_log', (data) => {
+        logMessage(inferenceLogs, data.data);
+    });
+
+    socket.on('inference_result', (data) => {
+        inferenceResultsContainer.innerHTML = ''; // Clear spinner
+        
+        // Original Image and Invariants
+        const originalRow = document.createElement('div');
+        originalRow.className = 'row mb-4';
+        let originalImageHTML = `
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header text-center"><strong>Original Image</strong></div>
+                    <div class="card-body p-2 d-flex align-items-center justify-content-center">
+                        <img src="${inferenceImagePreview.src}" class="img-fluid" alt="Original Image">
+                    </div>
+                </div>
+            </div>`;
+        let invariantsHTML = data.invariants.map(inv => `
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-header text-center"><strong>${inv.name}</strong></div>
+                     <div class="card-body p-2 d-flex align-items-center justify-content-center">
+                        <img src="${inv.plot_b64}" class="img-fluid" alt="${inv.name} Plot">
+                    </div>
+                </div>
+            </div>`).join('');
+        originalRow.innerHTML = originalImageHTML + invariantsHTML;
+        inferenceResultsContainer.appendChild(originalRow);
+
+        // Segmentation results
+        const segmentationRow = document.createElement('div');
+        segmentationRow.className = 'row';
+        let segmentationsHTML = data.segmentations.map(seg => `
+            <div class="col-md-6 col-lg-3 mb-3">
+                <div class="card h-100">
+                    <div class="card-header text-center"><strong>${seg.name}</strong></div>
+                    <div class="card-body p-2 d-flex align-items-center justify-content-center">
+                        <img src="/static/${seg.path}?t=${new Date().getTime()}" class="img-fluid" alt="${seg.name} Segmentation">
+                    </div>
+                </div>
+            </div>`).join('');
+        segmentationRow.innerHTML = segmentationsHTML;
+        inferenceResultsContainer.appendChild(segmentationRow);
+    });
+
+    socket.on('inference_complete', () => {
+        logMessage(inferenceLogs, '🎉 Inference complete!');
+        inferenceBtn.disabled = false;
+        inferenceBtn.innerText = 'Run Inference';
+    });
+
+    socket.on('inference_error', (data) => {
+        logMessage(inferenceLogs, `🔴 ERROR: ${data.error}`);
+        inferenceBtn.disabled = false;
+        inferenceBtn.innerText = 'Run Inference';
+        alert(`An error occurred during inference: ${data.error}`);
+    });
+
 
     // --- BENCHMARKING Socket.IO Listeners ---
     socket.on('benchmark_log', (data) => {
@@ -333,10 +414,65 @@ document.addEventListener('DOMContentLoaded', () => {
             learning_rate: document.getElementById('learning_rate').value,
             img_size: document.getElementById('img_size').value,
             data_subset: document.getElementById('data_subset').value,
+            unet_features: document.getElementById('unet_features').value,
+            film_hidden_dim: document.getElementById('film_hidden_dim').value,
+            patch_hidden_dim: document.getElementById('patch_hidden_dim').value,
         };
         trainBtn.disabled = true;
         trainBtn.innerText = 'Training in Progress...';
         socket.emit('start_training', config);
+    });
+
+    // --- INFERENCE Event Listeners ---
+    inferenceImageUpload.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        inferenceImagePreview.src = URL.createObjectURL(file);
+        inferenceImagePreview.style.display = 'block';
+        inferenceBtn.disabled = true;
+        
+        try {
+            const response = await fetch('/upload-image', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (response.ok) {
+                inferenceUploadedImagePath = data.path;
+                inferenceBtn.disabled = false;
+            } else { throw new Error(data.error); }
+        } catch (error) {
+            alert(`Upload failed: ${error.message}`);
+            inferenceImagePreview.style.display = 'none';
+        }
+    });
+    
+    inferenceBtn.addEventListener('click', () => {
+        resetInferenceUI();
+        inferenceProgressCard.style.display = 'block';
+        inferenceResultsCard.style.display = 'block';
+        inferenceResultsContainer.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+
+        const config = {
+            output_dir: document.getElementById('inference_output_dir').value,
+            class_csv: document.getElementById('inference_class_csv').value,
+            image_path: inferenceUploadedImagePath,
+            // Re-use advanced params from Train tab
+            img_size: document.getElementById('img_size').value,
+            unet_features: document.getElementById('unet_features').value,
+            film_hidden_dim: document.getElementById('film_hidden_dim').value,
+            patch_hidden_dim: document.getElementById('patch_hidden_dim').value,
+        };
+
+        if (!config.output_dir || !config.class_csv || !config.image_path) {
+            alert("Please provide the Output Directory, Class CSV, and upload an image.");
+            resetInferenceUI();
+            return;
+        }
+
+        inferenceBtn.disabled = true;
+        inferenceBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running...';
+        socket.emit('start_inference', config);
     });
 
     benchmarkBtn.addEventListener('click', () => {
@@ -349,6 +485,9 @@ document.addEventListener('DOMContentLoaded', () => {
             img_size: document.getElementById('img_size').value,
             data_subset: document.getElementById('data_subset').value,
             batch_size: document.getElementById('batch_size').value,
+            unet_features: document.getElementById('unet_features').value,
+            film_hidden_dim: document.getElementById('film_hidden_dim').value,
+            patch_hidden_dim: document.getElementById('patch_hidden_dim').value,
         };
         if (!config.output_dir || !config.class_csv) {
             alert("Please select both an Output Directory and a Class CSV file for benchmarking.");

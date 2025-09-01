@@ -1,3 +1,5 @@
+# trainer.py
+
 import os
 import numpy as np
 import pandas as pd
@@ -14,19 +16,22 @@ from sklearn.model_selection import train_test_split
 import pickle
 from tqdm import tqdm
 import eventlet
+import json
 
+# Import the unified model classes from models.py
+from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
+# Import the single source of truth for feature calculations
+from feature_calculators import CMCalc, FMCalc
 
 class Trainer:
 
     def __init__(self, config, socketio):
-
         self.config = config
         self.socketio = socketio
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Trainer initialized on device: {self.device}")
 
     def update_status(self, log_message, stage=None, progress=None):
-
         print(log_message)
         payload = {'log_message': log_message}
         if stage:
@@ -37,11 +42,7 @@ class Trainer:
         eventlet.sleep(0.01)
 
     # DATA PREPROCESSING FUNCTIONS
-
     def preprocess_images(self, original_image_paths, processed_image_dir, img_size):
-        """
-        Resizes and saves source images to a processed directory. Skips existing files.
-        """
         os.makedirs(processed_image_dir, exist_ok=True)
         self.update_status("--- Starting Image Pre-processing ---", stage='setup_images', progress=0)
         
@@ -65,7 +66,6 @@ class Trainer:
         return processed_image_paths
 
     def preprocess_masks(self, rgb_mask_paths, processed_mask_dir, mapping, img_size):
-
         os.makedirs(processed_mask_dir, exist_ok=True)
         self.update_status("--- Starting Mask Pre-processing ---", stage='setup_masks', progress=0)
         
@@ -79,10 +79,7 @@ class Trainer:
             
             if not os.path.exists(processed_path):
                 mask_rgb_pil = Image.open(rgb_path).convert("RGB")
-                
-                # Resize mask to match image size, using NEAREST neighbor interpolation
                 mask_rgb_pil = mask_rgb_pil.resize(img_size, resample=Image.NEAREST)
-
                 mask_rgb_np = np.array(mask_rgb_pil)
                 mask_class = np.zeros(mask_rgb_np.shape[:2], dtype=np.uint8)
                 
@@ -100,81 +97,15 @@ class Trainer:
                 
         self.update_status(" Mask pre-processing complete.", stage='setup_masks', progress=100)
         return processed_mask_paths
-     # Mapping from RGB to class indices
-    def create_color_maps(self, csv_path):
 
+    def create_color_maps(self, csv_path):
         df = pd.read_csv(csv_path)
         df.columns = [col.strip() for col in df.columns]
         rgb_to_class_idx = {tuple([row['r'], row['g'], row['b']]): i for i, row in df.iterrows()}
         num_classes = len(df)
         return rgb_to_class_idx, num_classes
 
-    # HELPER & MODEL CLASSES
-
-
-    class InvariantMethods:
-        def _compute_central_moments(self, channel):
-            h, w = channel.shape
-            y_coords, x_coords = np.mgrid[0:h, 0:w]
-            m00 = np.sum(channel)
-            if m00 == 0: return 0, 0, m00
-            x_bar = np.sum(x_coords * channel) / m00
-            y_bar = np.sum(y_coords * channel) / m00
-            return x_bar, y_bar, m00
-        
-
-
-        # Complex moments
-        def compute_complex_moments_rgb(self, image_rgb, max_order: int = 2):
-            all_channel_moments = []
-            for c in range(image_rgb.shape[2]):
-                channel = image_rgb[:, :, c].astype(np.float64)
-                h, w = channel.shape
-                x_bar, y_bar, m00 = self._compute_central_moments(channel)
-                y_coords, x_coords = np.mgrid[0:h, 0:w]
-                z = (x_coords - x_bar) + 1j * (y_coords - y_bar)
-                moments = []
-                m00_norm = m00 if m00 != 0 else 1
-                for p in range(max_order + 1):
-                    for q in range(max_order + 1):
-                        if p + q >= 2:
-                            cm_raw = np.sum(channel * (z ** p) * (np.conj(z) ** q))
-                            norm_factor = m00_norm ** (((p + q) / 2.0) + 1.0)
-                            moments.append(cm_raw / norm_factor if norm_factor != 0 else 0)
-                all_channel_moments.append(np.abs(np.array(moments)))
-            return np.concatenate(all_channel_moments)
-        
-
-
-
-
-        # Fourier-Mellin
-        def fourier_mellin_descriptor(self, image_rgb, log_polar_size=(64, 64)):
-            descriptors = []
-            for c in range(image_rgb.shape[2]):
-                channel = image_rgb[:, :, c].astype(np.float32)
-                f_transform = np.fft.fft2(channel)
-                f_transform_shifted = np.fft.fftshift(f_transform)
-                magnitude_spectrum = np.log1p(np.abs(f_transform_shifted))
-                center = (channel.shape[1] / 2, channel.shape[0] / 2)
-                max_radius = np.sqrt(((channel.shape[0] / 2) ** 2) + ((channel.shape[1] / 2) ** 2))
-                log_polar_map = cv2.logPolar(magnitude_spectrum, center, max_radius, flags=cv2.INTER_LINEAR + cv2.WARP_FILL_OUTLIERS)
-                log_polar_resized = cv2.resize(log_polar_map, log_polar_size, interpolation=cv2.INTER_LINEAR)
-                descriptors.append(np.abs(np.fft.fft2(log_polar_resized)).flatten())
-            return np.concatenate(descriptors)
-
-        def compute_invariants_on_patches(self, image_rgb, method_func, patch_size=64, stride=16):
-            h, w, _ = image_rgb.shape
-            output_h = (h - patch_size) // stride + 1
-            output_w = (w - patch_size) // stride + 1
-            dummy_patch = np.zeros((patch_size, patch_size, 3), dtype=np.uint8)
-            feature_len = len(method_func(dummy_patch))
-            feature_map = np.zeros((output_h, output_w, feature_len))
-            for i in range(output_h):
-                for j in range(output_w):
-                    patch = image_rgb[i * stride: i * stride + patch_size, j * stride: j * stride + patch_size]
-                    feature_map[i, j, :] = method_func(patch)
-            return feature_map
+    # --- [REMOVED] The incorrect InvariantMethods class is gone. ---
 
     class SegmentationDataset(Dataset):
         def __init__(self, image_paths, mask_paths, feature_cache=None, feature_type='none'):
@@ -189,10 +120,8 @@ class Trainer:
         def __getitem__(self, idx):
             img_path = self.image_paths[idx]
             mask_path = self.mask_paths[idx]
-            
             image = Image.open(img_path).convert("RGB")
             image_tensor = TF.to_tensor(image)
-            
             mask = Image.open(mask_path)
             mask_np = np.array(mask)
             mask_tensor = torch.from_numpy(mask_np).long()
@@ -206,145 +135,7 @@ class Trainer:
                     feature_tensor = feature_tensor.permute(2, 0, 1)
                 return (image_tensor, feature_tensor), mask_tensor
 
-    class DoubleConv(nn.Module):
-        def __init__(self, in_channels, out_channels):
-            super().__init__()
-            self.conv = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
-                nn.BatchNorm2d(out_channels),
-                nn.ReLU(inplace=True)
-            )
-        def forward(self, x):
-            return self.conv(x)
-        
-
-
-
-
-
-############# Baseline U-net architecture   ###############
-
-
-
-
-
-    class UNet(nn.Module):
-        def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128]):
-            super().__init__()
-            self.downs = nn.ModuleList()
-            self.ups = nn.ModuleList()
-            self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-            
-            for feature in features:
-                self.downs.append(Trainer.DoubleConv(in_channels, feature))
-                in_channels = feature
-                
-            for feature in reversed(features):
-                self.ups.append(nn.ConvTranspose2d(feature * 2, feature, kernel_size=2, stride=2))
-                self.ups.append(Trainer.DoubleConv(feature * 2, feature))
-                
-            self.bottleneck = Trainer.DoubleConv(features[-1], features[-1] * 2)
-            self.final_conv = nn.Conv2d(features[0], num_classes, kernel_size=1)
-
-        def forward(self, x):
-            skip_connections = []
-            for down in self.downs:
-                x = down(x)
-                skip_connections.append(x)
-                x = self.pool(x)
-            
-            x = self.bottleneck(x)
-            skip_connections = skip_connections[::-1]
-            
-            for idx in range(0, len(self.ups), 2):
-                x = self.ups[idx](x)
-                skip_connection = skip_connections[idx // 2]
-                if x.shape != skip_connection.shape:
-                    x = TF.resize(x, size=skip_connection.shape[2:])
-                concat_skip = torch.cat((skip_connection, x), dim=1)
-                x = self.ups[idx + 1](concat_skip)
-            
-            return self.final_conv(x)
-        
-
-
-
-
-###################### U-net with feature wise linear modulation (FILM) ######################
-
-
-
-
-    class UNetWithFiLM(UNet):
-        def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30):
-            super().__init__(in_channels=in_channels, num_classes=num_classes, features=features)
-            bottleneck_channels = features[-1]
-            self.feature_processor = nn.Sequential(
-                nn.Linear(feature_len, 128),
-                nn.ReLU(inplace=True),
-                nn.Linear(128, bottleneck_channels * 2) # Predict gamma and beta
-            )
-            self.bottleneck = Trainer.DoubleConv(bottleneck_channels, features[-1] * 2)
-
-        def forward(self, x, ft):
-            skip_connections = []
-            for down in self.downs:
-                x = down(x)
-                skip_connections.append(x)
-                x = self.pool(x)
-            
-            #FiLM modulation
-            film_params = self.feature_processor(ft)
-            gamma, beta = torch.chunk(film_params, 2, dim=-1)
-            gamma = gamma.view(gamma.size(0), -1, 1, 1)
-            beta = beta.view(beta.size(0), -1, 1, 1)
-            x = gamma * x + beta
-            
-            x = self.bottleneck(x)
-            skip_connections = skip_connections[::-1]
-            
-            for idx in range(0, len(self.ups), 2):
-                x = self.ups[idx](x)
-                skip_connection = skip_connections[idx // 2]
-                if x.shape != skip_connection.shape:
-                    x = TF.resize(x, size=skip_connection.shape[2:])
-                concat_skip = torch.cat((skip_connection, x), dim=1)
-                x = self.ups[idx + 1](concat_skip)
-            
-            return self.final_conv(x)
-
-
-
-    ############          Unet with patch concatenation        #################
-
-
-
-
-    class UNetWithPatchFeatures(UNet):
-        def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30):
-            super().__init__(in_channels=in_channels + features[0], num_classes=num_classes, features=features)
-            self.patch_processor = nn.Sequential(
-                nn.Conv2d(feature_len, 64, kernel_size=3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(64, features[0], kernel_size=1)
-            )
-
-        def forward(self, x, ft_map):
-            processed_ft = self.patch_processor(ft_map)
-            processed_ft = TF.resize(processed_ft, size=x.shape[2:])
-            x = torch.cat([x, processed_ft], dim=1)
-            return super().forward(x)
-
-
-
-
-
-
-    #  TRAINING & VALIDATION LOOPS
-
+    # TRAINING & VALIDATION LOOPS
     def train_fn(self, loader, model, optimizer, loss_fn, feature_type='none', epoch_num=0, total_epochs=0):
         model.train()
         total_loss = 0
@@ -397,23 +188,12 @@ class Trainer:
         self.update_status(f"Validation accuracy: {accuracy:.2f}%")
         return accuracy.item()
     
-
-
-
-
-
-
-
-
-
-
     # MAIN EXECUTION METHOD
-    
     def run(self):
         try:
             self.update_status("Starting training process...", stage='init', progress=0)
             
-            # --- 1. Setup Directories ---
+            # Setup Directories
             output_dir = self.config['output_dir']
             saved_models_dir = os.path.join(output_dir, "saved_models")
             processed_image_dir = os.path.join(output_dir, "processed_images")
@@ -434,18 +214,35 @@ class Trainer:
             image_files_original = all_image_files[:subset_size]
             rgb_mask_files = all_rgb_mask_files[:subset_size]
             
-            #Pre-process Data
+            # Pre-process Data
             target_size = (self.config['img_size'], self.config['img_size'])
             processed_image_files = self.preprocess_images(image_files_original, processed_image_dir, target_size)
             processed_mask_files = self.preprocess_masks(rgb_mask_files, processed_mask_dir, rgb_to_class_idx, target_size)
             
-            # Pre-compute/cache Invariant Features
-            invariant_extractor = self.InvariantMethods()
+            # Pre-compute/cache Invariant Features using the centralized calculators
+            cm_calc = CMCalc()
+            fm_calc = FMCalc()
+
+            def compute_patches(image_rgb, method_func, patch_size=64, stride=16):
+                h, w, _ = image_rgb.shape
+                output_h = (h - patch_size) // stride + 1
+                output_w = (w - patch_size) // stride + 1
+                dummy_patch = np.zeros((patch_size, patch_size, 3), dtype=np.uint8)
+                feature_len = len(method_func(dummy_patch))
+                feature_map = np.zeros((output_h, output_w, feature_len))
+                for i in range(output_h):
+                    for j in range(output_w):
+                        patch = image_rgb[i * stride: i * stride + patch_size, j * stride: j * stride + patch_size]
+                        feature_map[i, j, :] = method_func(patch)
+                return feature_map
+            
             feature_caches = {}
+            n_fm_moments_per_channel = 4096 # Use a fixed, reasonable number like 64*64
+
             feature_configs = {
-                'cm_global': (invariant_extractor.compute_complex_moments_rgb, 'global'),
-                'fmt_global': (invariant_extractor.fourier_mellin_descriptor, 'global'),
-                'cm_patch': (lambda img: invariant_extractor.compute_invariants_on_patches(img, invariant_extractor.compute_complex_moments_rgb), 'patch'),
+                'cm_global': (cm_calc.cm_rgb, 'global'),
+                'fmt_global': (lambda img: fm_calc.fm_rgb(img, n=n_fm_moments_per_channel), 'global'),
+                'cm_patch': (lambda img: compute_patches(img, cm_calc.cm_rgb), 'patch'),
             }
             for name, (func, f_type) in feature_configs.items():
                 cache_path = os.path.join(cache_dir, f"{name}_cache_{subset_size}.pkl")
@@ -478,14 +275,15 @@ class Trainer:
             cm_global_len = next(iter(feature_caches['cm_global'].values())).shape[0]
             fmt_global_len = next(iter(feature_caches['fmt_global'].values())).shape[0]
             cm_patch_len = next(iter(feature_caches['cm_patch'].values())).shape[-1]
+
             models_to_train = {
-                "Baseline": {"model": self.UNet(num_classes=num_classes), "cache": None, "type": "none"},
-                "FiLM_CM": {"model": self.UNetWithFiLM(num_classes=num_classes, feature_len=cm_global_len), "cache": feature_caches['cm_global'], "type": "global"},
-                "FiLM_FMT": {"model": self.UNetWithFiLM(num_classes=num_classes, feature_len=fmt_global_len), "cache": feature_caches['fmt_global'], "type": "global"},
-                "Patch_CM": {"model": self.UNetWithPatchFeatures(num_classes=num_classes, feature_len=cm_patch_len), "cache": feature_caches['cm_patch'], "type": "patch"},
+                "Baseline": {"model": UNet(num_classes=num_classes, features=self.config['unet_features']), "cache": None, "type": "none"},
+                "FiLM_CM": {"model": UNetWithFiLM(num_classes=num_classes, feature_len=cm_global_len, features=self.config['unet_features'], film_hidden_dim=self.config['film_hidden_dim']), "cache": feature_caches['cm_global'], "type": "global"},
+                "FiLM_FMT": {"model": UNetWithFiLM(num_classes=num_classes, feature_len=fmt_global_len, features=self.config['unet_features'], film_hidden_dim=self.config['film_hidden_dim']), "cache": feature_caches['fmt_global'], "type": "global"},
+                "Patch_CM": {"model": UNetWithPatchFeatures(num_classes=num_classes, feature_len=cm_patch_len, features=self.config['unet_features'], patch_hidden_dim=self.config['patch_hidden_dim']), "cache": feature_caches['cm_patch'], "type": "patch"},
             }
             
-            #Main Training Loop
+            # Main Training Loop
             total_epochs = self.config['epochs']
             histories = {}
             for name, model_config in models_to_train.items():
@@ -512,8 +310,16 @@ class Trainer:
                 histories[name] = history
                 torch.save(model.state_dict(), os.path.join(saved_models_dir, f"{name}_model.pth"))
                 self.update_status(f" {name} model saved.")
-                
-            #Final Visualization 
+
+            # Save the configuration used for this training run
+            self.update_status("--- Saving training configuration ---")
+            config_to_save = {k: v for k, v in self.config.items()}
+            config_path = os.path.join(output_dir, "training_config.json")
+            with open(config_path, 'w') as f:
+                json.dump(config_to_save, f, indent=4)
+            self.update_status(f"✅ Configuration saved to {config_path}")
+
+            # Final Visualization 
             self.update_status("--- Generating final training plots ---")
             plt.style.use('seaborn-v0_8-whitegrid')
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 8))
