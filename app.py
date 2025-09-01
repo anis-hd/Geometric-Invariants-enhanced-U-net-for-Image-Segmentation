@@ -1,5 +1,3 @@
-# app.py
-
 import os
 import glob
 import tkinter as tk
@@ -33,7 +31,6 @@ if not os.path.exists(OUTPUT_FOLDER):
 
 @app.route('/')
 def index():
-    """Renders the main interface."""
     return render_template('index.html')
 
 
@@ -119,12 +116,10 @@ def handle_start_training(config):
         return
 
     try:
-        # Basic parameters
         config['epochs'] = int(config['epochs']); config['batch_size'] = int(config['batch_size'])
         config['learning_rate'] = float(config['learning_rate']); config['img_size'] = int(config['img_size'])
         config['data_subset'] = int(config['data_subset'])
         
-        # Advanced architecture parameters
         config['unet_features'] = [int(f.strip()) for f in config['unet_features'].split(',') if f.strip()]
         config['film_hidden_dim'] = int(config['film_hidden_dim'])
         config['patch_hidden_dim'] = int(config['patch_hidden_dim'])
@@ -167,7 +162,6 @@ def handle_start_inference(config):
         socketio.emit('inference_error', {'error': 'Missing required path(s). Please fill out all fields.'})
         return
         
-    # No need to parse advanced params; they are loaded from the config file on the backend.
     inference_instance = InferenceRunner(config, socketio)
     socketio.start_background_task(inference_instance.run)
 

@@ -1,5 +1,3 @@
-# inference.py
-
 import os
 import cv2
 import numpy as np
@@ -18,12 +16,9 @@ import json
 import time
 
 from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
-# Import the single source of truth for feature calculations
 from feature_calculators import InvariantMethods
 
 class InferenceRunner:
-    """Handles the model inference process for a single image."""
-
     def __init__(self, config, socketio):
         self.config = config
         self.socketio = socketio
@@ -35,18 +30,20 @@ class InferenceRunner:
         self.socketio.emit('inference_log', {'data': message})
         eventlet.sleep(0.01)
 
-    # --- Helper methods ---
+
     def _create_color_maps(self, csv_path):
         df = pd.read_csv(csv_path)
         df.columns = [col.strip() for col in df.columns]
         class_idx_to_rgb = {i: np.array([row['r'], row['g'], row['b']]) for i, row in df.iterrows()}
         return class_idx_to_rgb, len(df)
 
+
     def _mask_to_rgb(self, mask_np, cmap):
         rgb_mask = np.zeros((*mask_np.shape, 3), dtype=np.uint8)
         for class_idx, color in cmap.items():
             rgb_mask[mask_np == class_idx] = color
         return Image.fromarray(rgb_mask)
+
 
     def _plot_invariants(self, moments, title, method='cm'):
         fig, ax = plt.subplots(figsize=(5, 3), dpi=100)
@@ -57,7 +54,6 @@ class InferenceRunner:
         ax.set_xlabel("Feature Index")
         if method == 'fm':
             ax.set_ylabel("Magnitude")
-            # For the jupyter version, a simple y-scale is fine
         else:
             ax.set_ylabel("Magnitude (log scale)")
             ax.set_yscale('symlog')
@@ -67,14 +63,15 @@ class InferenceRunner:
         plt.close(fig)
         return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode('utf-8')
 
+
+
     def run(self):
         try:
-            # 1. Load the saved training config first
             self.update_log("--- 1. Loading Training Configuration ---")
             config_path = os.path.join(self.config['output_dir'], "training_config.json")
             if not os.path.exists(config_path):
                 error_msg = f"Configuration file not found at {config_path}."
-                self.update_log(f"🔴 ERROR: {error_msg}")
+                self.update_log(f"ERROR: {error_msg}")
                 self.socketio.emit('inference_error', {'error': error_msg})
                 return
             with open(config_path, 'r') as f:
@@ -83,9 +80,8 @@ class InferenceRunner:
             for key in keys_to_override:
                 if key in training_config:
                     self.config[key] = training_config[key]
-            self.update_log("✅ Successfully loaded and applied training configuration.")
+            self.update_log("Successfully loaded and applied training configuration.")
             
-            # 2. Setup
             self.update_log("--- 2. Initializing ---")
             img_path = self.config['image_path']
             output_dir = self.config['output_dir']
@@ -96,19 +92,16 @@ class InferenceRunner:
             color_map, num_classes = self._create_color_maps(class_csv)
             self.update_log(f"Loaded color map with {num_classes} classes.")
 
-            # 3. Load and Preprocess Image
             self.update_log(f"--- 3. Loading and Processing Image: {os.path.basename(img_path)} ---")
             image = Image.open(img_path).convert("RGB").resize(img_size)
             image_np = np.array(image)
             image_tensor = TF.to_tensor(image).unsqueeze(0).to(self.device)
 
-            # 4. Calculate Invariants using the Jupyter-identical methods
             self.update_log("--- 4. Calculating Geometric Invariants (Jupyter Method) ---")
             inv_methods = InvariantMethods()
             
             cm_global = inv_methods.compute_complex_moments_rgb(image_np)
             fmt_global = inv_methods.fourier_mellin_descriptor(image_np)
-            # Correctly calculate patch features for the input image
             cm_patch = inv_methods.compute_invariants_on_patches(image_np, inv_methods.compute_complex_moments_rgb)
 
             self.update_log(" Invariants calculated successfully.")
@@ -119,7 +112,6 @@ class InferenceRunner:
                 'cm_patch': torch.from_numpy(cm_patch).float().permute(2, 0, 1).unsqueeze(0).to(self.device)
             }
 
-            # 5. Load Models
             self.update_log("--- 5. Loading Pre-trained Models ---")
             models_to_run = {
                 "Baseline": {"model": UNet(num_classes=num_classes, features=self.config['unet_features']), "features": None},
@@ -139,7 +131,6 @@ class InferenceRunner:
                 config['model'].eval()
             self.update_log("Models loaded.")
 
-            # 6. Run Inference and Generate Outputs
             self.update_log("--- 6. Running Inference on Models ---")
             results = {'segmentations': []}
             with torch.no_grad():
@@ -165,17 +156,16 @@ class InferenceRunner:
                         'path': os.path.join('outputs', filename).replace('\\', '/')
                     })
             
-            # 7. Compile and Send Final Results
             self.update_log("--- 7. Compiling Final Results ---")
             results['invariants'] = [
                 {'name': 'Complex Moments (Global)', 'plot_b64': self._plot_invariants(cm_global, 'Complex Moments', method='cm')},
                 {'name': 'Fourier-Mellin (Global)', 'plot_b64': self._plot_invariants(fmt_global, 'Fourier-Mellin', method='fm')}
             ]
             self.socketio.emit('inference_result', results)
-            self.update_log("✅ Inference complete.")
+            self.update_log("Inference complete.")
             self.socketio.emit('inference_complete')
 
         except Exception as e:
             error_message = f"An error occurred during inference: {e}"
-            self.update_log(f"🔴 ERROR: {error_message}")
+            self.update_log(f"ERROR: {error_message}")
             self.socketio.emit('inference_error', {'error': str(e)})

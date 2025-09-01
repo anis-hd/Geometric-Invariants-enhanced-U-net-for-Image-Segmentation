@@ -17,10 +17,7 @@ import pickle
 from tqdm import tqdm
 import eventlet
 import json
-
-# Import the unified model classes from models.py
 from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
-# Import the single source of truth for feature calculations
 from feature_calculators import InvariantMethods
 
 class Trainer:
@@ -212,12 +209,12 @@ class Trainer:
             image_files_original = all_image_files[:subset_size]
             rgb_mask_files = all_rgb_mask_files[:subset_size]
             
-            # Pre-process Data
+            # Pre-process 
             target_size = (self.config['img_size'], self.config['img_size'])
             processed_image_files = self.preprocess_images(image_files_original, processed_image_dir, target_size)
             processed_mask_files = self.preprocess_masks(rgb_mask_files, processed_mask_dir, rgb_to_class_idx, target_size)
             
-            # Pre-compute/cache Invariant Features using the Jupyter-identical methods
+            # Pre-compute/cache
             invariant_extractor = InvariantMethods()
             feature_caches = {}
             
@@ -254,7 +251,6 @@ class Trainer:
             if self.device.type == "cuda":
                 loader_args.update({'num_workers': 2, 'pin_memory': True})
                 
-            # Define Models to Train 
             cm_global_len = next(iter(feature_caches['cm_global'].values())).shape[0]
             fmt_global_len = next(iter(feature_caches['fmt_global'].values())).shape[0]
             cm_patch_len = next(iter(feature_caches['cm_patch'].values())).shape[-1]
@@ -266,7 +262,6 @@ class Trainer:
                 "Patch_CM": {"model": UNetWithPatchFeatures(num_classes=num_classes, feature_len=cm_patch_len, features=self.config['unet_features'], patch_hidden_dim=self.config['patch_hidden_dim']), "cache": feature_caches['cm_patch'], "type": "patch"},
             }
             
-            # Main Training Loop
             total_epochs = self.config['epochs']
             histories = {}
             for name, model_config in models_to_train.items():
@@ -294,13 +289,13 @@ class Trainer:
                 torch.save(model.state_dict(), os.path.join(saved_models_dir, f"{name}_model.pth"))
                 self.update_status(f" {name} model saved.")
 
-            # Save the configuration used for this training run
+            #Save the configuration used for this training run
             self.update_status("--- Saving training configuration ---")
             config_to_save = {k: v for k, v in self.config.items()}
             config_path = os.path.join(output_dir, "training_config.json")
             with open(config_path, 'w') as f:
                 json.dump(config_to_save, f, indent=4)
-            self.update_status(f"✅ Configuration saved to {config_path}")
+            self.update_status(f"Configuration saved to {config_path}")
 
             # Final Visualization 
             self.update_status("--- Generating final training plots ---")

@@ -1,5 +1,3 @@
-# benchmarker.py
-
 import os
 import numpy as np
 import pandas as pd
@@ -22,8 +20,6 @@ import pickle
 import random
 import eventlet
 import json
-
-# Import the unified model classes from models.py
 from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
 
 class Benchmarker:
@@ -134,7 +130,7 @@ class Benchmarker:
         full_path = os.path.join('static', relative_path)
         plt.savefig(full_path, bbox_inches='tight')
         plt.close()
-        self.update_log(f"✅ {filename} generated.")
+        self.update_log(f"{filename} generated.")
         self.socketio.emit('benchmark_result', {'type': 'plot', 'url': relative_path, 'title': filename.replace('_', ' ').replace('.png', '').title()})
 
     def _tsne_plotter(self, features_cache, all_mask_paths, title):
@@ -227,7 +223,7 @@ class Benchmarker:
 
             if not os.path.exists(config_path):
                 error_msg = f"Configuration file not found at {config_path}. Please run training for this output directory first."
-                self.update_log(f"🔴 ERROR: {error_msg}")
+                self.update_log(f"ERROR: {error_msg}")
                 self.socketio.emit('benchmark_error', {'error': error_msg})
                 return
 
@@ -238,7 +234,7 @@ class Benchmarker:
             for key in keys_to_override:
                 if key in training_config:
                     self.config[key] = training_config[key]
-            self.update_log("✅ Successfully loaded and applied training configuration.")
+            self.update_log("Successfully loaded and applied training configuration.")
 
             # Load Data, Maps, and Caches
             self.update_log("--- 2. Loading Data, Maps, and Caches ---")

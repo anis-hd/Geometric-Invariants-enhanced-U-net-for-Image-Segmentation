@@ -5,7 +5,6 @@ import torch.nn as nn
 import torchvision.transforms.functional as TF
 
 class DoubleConv(nn.Module):
-    """A block of two 3x3 convolutional layers, each followed by BatchNorm and ReLU."""
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.conv = nn.Sequential(
@@ -18,9 +17,18 @@ class DoubleConv(nn.Module):
         )
     def forward(self, x):
         return self.conv(x)
+    
+
+
+
+
+
+
+
+
+# Baseline U-Net architecture
 
 class UNet(nn.Module):
-    """Baseline U-Net architecture."""
     def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128]):
         super().__init__()
         self.downs = nn.ModuleList()
@@ -59,9 +67,13 @@ class UNet(nn.Module):
             x = self.ups[idx + 1](concat_skip)
         
         return self.final_conv(x)
+    
+
+
+
+#U-Net with Feature-wise Linear Modulation (FiLM) at the bottleneck
 
 class UNetWithFiLM(UNet):
-    """U-Net with Feature-wise Linear Modulation (FiLM) at the bottleneck."""
     def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30, film_hidden_dim=128):
         super().__init__(in_channels=in_channels, num_classes=num_classes, features=features)
         bottleneck_channels = features[-1]
@@ -99,8 +111,13 @@ class UNetWithFiLM(UNet):
         
         return self.final_conv(x)
 
+
+
+
+
+#U-Net that concatenates processed patch-based features at the input
+
 class UNetWithPatchFeatures(UNet):
-    """U-Net that concatenates processed patch-based features at the input."""
     def __init__(self, in_channels=3, num_classes=23, features=[16, 32, 64, 128], feature_len=30, patch_hidden_dim=64):
         # The input channels to the first conv layer must be increased to accommodate the feature map
         super().__init__(in_channels=in_channels + features[0], num_classes=num_classes, features=features)

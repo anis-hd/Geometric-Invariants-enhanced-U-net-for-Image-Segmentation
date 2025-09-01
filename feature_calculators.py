@@ -1,17 +1,8 @@
-# feature_calculators.py
-
 import numpy as np
 import cv2
 
 class InvariantMethods:
-    """
-    This class contains the exact invariant calculation methods from the original 
-    Jupyter notebook script. This is to ensure that the web application's results
-    will be identical to the initial research findings.
-    
-    Notably, the fourier_mellin_descriptor is a simplified, unnormalized version
-    that proved effective in the original low-data experiments.
-    """
+
     def _compute_central_moments(self, channel):
         h, w = channel.shape
         y_coords, x_coords = np.mgrid[0:h, 0:w]
@@ -21,10 +12,10 @@ class InvariantMethods:
         y_bar = np.sum(y_coords * channel) / m00
         return x_bar, y_bar, m00
 
+
+
+
     def compute_complex_moments_rgb(self, image_rgb, max_order: int = 2):
-        """
-        Jupyter Version: Calculates normalized complex moments and takes the absolute value.
-        """
         all_channel_moments = []
         for c in range(image_rgb.shape[2]):
             channel = image_rgb[:, :, c].astype(np.float64)
@@ -43,11 +34,11 @@ class InvariantMethods:
             all_channel_moments.append(np.abs(np.array(moments)))
         return np.concatenate(all_channel_moments)
 
+
+
+
     def fourier_mellin_descriptor(self, image_rgb, log_polar_size=(64, 64)):
-        """
-        Jupyter Version: Simplified, unnormalized Fourier-Mellin implementation.
-        This version was found to work well in the low-data regime.
-        """
+
         descriptors = []
         for c in range(image_rgb.shape[2]):
             channel = image_rgb[:, :, c].astype(np.float32)
@@ -61,10 +52,9 @@ class InvariantMethods:
             descriptors.append(np.abs(np.fft.fft2(log_polar_resized)).flatten())
         return np.concatenate(descriptors)
 
+
+
     def compute_invariants_on_patches(self, image_rgb, method_func, patch_size=64, stride=16):
-        """
-        Jupyter Version: Helper to compute invariants on patches.
-        """
         h, w, _ = image_rgb.shape
         output_h = (h - patch_size) // stride + 1
         output_w = (w - patch_size) // stride + 1
