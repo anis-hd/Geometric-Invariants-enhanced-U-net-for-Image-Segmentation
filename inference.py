@@ -19,7 +19,7 @@ import time
 
 from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
 # Import the single source of truth for feature calculations
-from feature_calculators import CMCalc, FMCalc
+from feature_calculators import InvariantMethods
 
 class InferenceRunner:
     """Handles the model inference process for a single image."""
@@ -37,21 +37,18 @@ class InferenceRunner:
 
     # --- Helper methods ---
     def _create_color_maps(self, csv_path):
-        # ... unchanged
         df = pd.read_csv(csv_path)
         df.columns = [col.strip() for col in df.columns]
         class_idx_to_rgb = {i: np.array([row['r'], row['g'], row['b']]) for i, row in df.iterrows()}
         return class_idx_to_rgb, len(df)
 
     def _mask_to_rgb(self, mask_np, cmap):
-        # ... unchanged
         rgb_mask = np.zeros((*mask_np.shape, 3), dtype=np.uint8)
         for class_idx, color in cmap.items():
             rgb_mask[mask_np == class_idx] = color
         return Image.fromarray(rgb_mask)
 
     def _plot_invariants(self, moments, title, method='cm'):
-        # ... unchanged
         fig, ax = plt.subplots(figsize=(5, 3), dpi=100)
         n = len(moments)
         x = np.arange(n)
@@ -59,10 +56,8 @@ class InferenceRunner:
         ax.set_title(title)
         ax.set_xlabel("Feature Index")
         if method == 'fm':
-            ax.set_ylabel("Normalized Magnitude")
-            max_abs_val = np.max(np.abs(moments)) if len(moments) > 0 else 1.0
-            if max_abs_val == 0: max_abs_val = 1.0
-            ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
+            ax.set_ylabel("Magnitude")
+            # For the jupyter version, a simple y-scale is fine
         else:
             ax.set_ylabel("Magnitude (log scale)")
             ax.set_yscale('symlog')
@@ -107,28 +102,14 @@ class InferenceRunner:
             image_np = np.array(image)
             image_tensor = TF.to_tensor(image).unsqueeze(0).to(self.device)
 
-            # 4. Calculate Invariants
-            self.update_log("--- 4. Calculating Geometric Invariants ---")
-            cm_calc = CMCalc()
-            fm_calc = FMCalc()
+            # 4. Calculate Invariants using the Jupyter-identical methods
+            self.update_log("--- 4. Calculating Geometric Invariants (Jupyter Method) ---")
+            inv_methods = InvariantMethods()
             
-            cm_global = cm_calc.cm_rgb(image_np)
-            
-            # For FM, use the fixed length used during training
-            n_fm_moments = 4096 
-            fmt_global = fm_calc.fm_rgb(image_np, n=n_fm_moments)
-            
-            # For patch, we still need to derive the shape from cache if possible
-            subset_size = training_config.get('data_subset', 50)
-            patch_cache_path = os.path.join(output_dir, "cache", f"cm_patch_cache_{subset_size}.pkl")
-            if os.path.exists(patch_cache_path):
-                 with open(patch_cache_path, 'rb') as f:
-                    patch_cache = pickle.load(f)
-                    dummy_patch_feature = next(iter(patch_cache.values()))
-                    cm_patch = np.zeros(dummy_patch_feature.shape) # Recreate shape
-            else:
-                 self.update_log("⚠️ Patch cache not found. Patch model may fail to load.")
-                 cm_patch = np.zeros((16, 16, 54)) # A reasonable default
+            cm_global = inv_methods.compute_complex_moments_rgb(image_np)
+            fmt_global = inv_methods.fourier_mellin_descriptor(image_np)
+            # Correctly calculate patch features for the input image
+            cm_patch = inv_methods.compute_invariants_on_patches(image_np, inv_methods.compute_complex_moments_rgb)
 
             self.update_log(" Invariants calculated successfully.")
             

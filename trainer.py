@@ -21,7 +21,7 @@ import json
 # Import the unified model classes from models.py
 from models import UNet, UNetWithFiLM, UNetWithPatchFeatures
 # Import the single source of truth for feature calculations
-from feature_calculators import CMCalc, FMCalc
+from feature_calculators import InvariantMethods
 
 class Trainer:
 
@@ -104,8 +104,6 @@ class Trainer:
         rgb_to_class_idx = {tuple([row['r'], row['g'], row['b']]): i for i, row in df.iterrows()}
         num_classes = len(df)
         return rgb_to_class_idx, num_classes
-
-    # --- [REMOVED] The incorrect InvariantMethods class is gone. ---
 
     class SegmentationDataset(Dataset):
         def __init__(self, image_paths, mask_paths, feature_cache=None, feature_type='none'):
@@ -219,31 +217,16 @@ class Trainer:
             processed_image_files = self.preprocess_images(image_files_original, processed_image_dir, target_size)
             processed_mask_files = self.preprocess_masks(rgb_mask_files, processed_mask_dir, rgb_to_class_idx, target_size)
             
-            # Pre-compute/cache Invariant Features using the centralized calculators
-            cm_calc = CMCalc()
-            fm_calc = FMCalc()
-
-            def compute_patches(image_rgb, method_func, patch_size=64, stride=16):
-                h, w, _ = image_rgb.shape
-                output_h = (h - patch_size) // stride + 1
-                output_w = (w - patch_size) // stride + 1
-                dummy_patch = np.zeros((patch_size, patch_size, 3), dtype=np.uint8)
-                feature_len = len(method_func(dummy_patch))
-                feature_map = np.zeros((output_h, output_w, feature_len))
-                for i in range(output_h):
-                    for j in range(output_w):
-                        patch = image_rgb[i * stride: i * stride + patch_size, j * stride: j * stride + patch_size]
-                        feature_map[i, j, :] = method_func(patch)
-                return feature_map
-            
+            # Pre-compute/cache Invariant Features using the Jupyter-identical methods
+            invariant_extractor = InvariantMethods()
             feature_caches = {}
-            n_fm_moments_per_channel = 4096 # Use a fixed, reasonable number like 64*64
-
+            
             feature_configs = {
-                'cm_global': (cm_calc.cm_rgb, 'global'),
-                'fmt_global': (lambda img: fm_calc.fm_rgb(img, n=n_fm_moments_per_channel), 'global'),
-                'cm_patch': (lambda img: compute_patches(img, cm_calc.cm_rgb), 'patch'),
+                'cm_global': (invariant_extractor.compute_complex_moments_rgb, 'global'),
+                'fmt_global': (invariant_extractor.fourier_mellin_descriptor, 'global'),
+                'cm_patch': (lambda img: invariant_extractor.compute_invariants_on_patches(img, invariant_extractor.compute_complex_moments_rgb), 'patch'),
             }
+
             for name, (func, f_type) in feature_configs.items():
                 cache_path = os.path.join(cache_dir, f"{name}_cache_{subset_size}.pkl")
                 if os.path.exists(cache_path):

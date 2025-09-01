@@ -1,6 +1,6 @@
-# Interactive Deep Learning Suite for Semantic Segmentation
+# Interactive Geometric Invariants Enhanced U-Net Models Training, Inference, and Benchmarking
 
-This project provides a complete, browser-based graphical user interface (GUI) for an end-to-end semantic segmentation pipeline. It allows users to train, benchmark, and analyze deep learning models (U-Net and its variants) without writing any code or using the command line.
+This project provides a complete, browser-based graphical user interface (GUI) for an end-to-end semantic segmentation pipeline. It allows users to train, benchmark, and analyze deep learning models (U-Net and its Fourier-Mellin and Complex Moments enhanced variants) without writing any code or using the command line.
 
 The application is built with **Python, Flask, and PyTorch** and features a multi-tabbed interface for:
 
@@ -19,8 +19,9 @@ The application is built with **Python, Flask, and PyTorch** and features a mult
 - [How to Use the Application](#how-to-use-the-application)
   - [Step 1: Launch the Application](#step-1-launch-the-application)
   - [Step 2: The "Train" Tab](#step-2-the-train-tab)
-  - [Step 3: The "Benchmark" Tab](#step-3-the-benchmark-tab)
-  - [Step 4: The "Geometric Invariants" Tab](#step-4-the-geometric-invariants-tab)
+  - [Step 3: The "Inference" Tab](#step-3-the-inference-tab)
+  - [Step 4: The "Benchmark" Tab](#step-4-the-benchmark-tab)
+  - [Step 5: The "Geometric Invariants" Tab](#step-5-the-geometric-invariants-tab)
 - [File and Folder Structure for Your Data](#file-and-folder-structure-for-your-data)
   - [Input Images](#input-images)
   - [RGB Masks](#rgb-masks)
@@ -66,14 +67,14 @@ The application is built with **Python, Flask, and PyTorch** and features a mult
 
 1. **Clone the Repository**
    ```bash
-   git clone <your-repository-url>
-   cd <your-project-folder>
+   git clone <repository-url>
+   cd <project-folder>
    ```
 
 2. **Create a Virtual Environment**
    ```bash
-   conda create -n segmentation_suite python=3.10
-   conda activate segmentation_suite
+   conda create -n geo_segmentation python=3.10
+   conda activate geo_segmentation
    ```
 
 3. **Install PyTorch**  
@@ -111,7 +112,8 @@ http://127.0.0.1:5000
 - **Configure Paths:** Select Image Folder, Mask Folder, Class Definition CSV, and Output Directory.
 ![paths](assets/paths.png)
 
-- **Set Hyperparameters:** Adjust epochs, batch size, learning rate, image size, and data subset.
+- **Set Hyperparameters:** Adjust epochs, batch size, learning rate, image size, and data subset. Also parameters for the architecture of the U-net.
+![preview](assets/advanced.png)
 - **Preview Data (optional):** Check sample images and masks before training.
 ![preview](assets/preview.png)
 
@@ -121,8 +123,21 @@ http://127.0.0.1:5000
 
 
 ---
+### Step 3: The "Inference" Tab
 
-### Step 3: The "Benchmark" Tab
+- **Configure Paths:** Select the training output directory and Class Definition CSV and an input image.
+![bench](assets/inference.png)
+
+- **Start Inference:** Run Inference with live logs.
+- **View Results:**
+
+  ![table](assets/inference_results.png)
+
+
+
+
+---
+### Step 4: The "Benchmark" Tab
 
 - **Configure Paths:** Select the training output directory and Class Definition CSV.
 ![bench](assets/bench.png)
@@ -136,15 +151,13 @@ http://127.0.0.1:5000
   ![tsne](assets/tsne.png)
 
   - Robustness charts under transformations
-  ![robust](assets/robust.png)
-
   - Segmentation comparison grids
   ![grid](assets/grid.png)
 
 
 ---
 
-### Step 4: The "Geometric Invariants" Tab
+### Step 5: The "Geometric Invariants" Tab
 
 - **Upload an Image:** Supported formats: `.jpg`, `.png`
 - **Choose Method:** Complex Moments or Fourier-Mellin
@@ -156,18 +169,7 @@ http://127.0.0.1:5000
 
 ---
 
-### Step 4: The "Inference" Tab
 
-- **Select Output Directory:** Choose the folder containing your trained models and configuration (`training_config.json`).
-- **Upload Image:** Supported formats: `.jpg`, `.png`
-- **Run Inference:** The selected image is processed by all available models (U-Net variants). Progress and logs are displayed in real time.
-- **View Results:**
-  - **Original Image:** Preview of the uploaded image.
-  - **Geometric Invariants:** Plots of Complex Moments and Fourier-Mellin descriptors for the image.
-  - **Segmentation Results:** Predicted masks from each model, visualized with color maps from your class CSV.
-  - **Download Outputs:** Segmentation masks are saved in `/static/outputs/` for further analysis.
-
-![inference](assets/inference.png)
 
 ---
 
